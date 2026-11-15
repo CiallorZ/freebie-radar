@@ -2,7 +2,7 @@ import { all, get, migrate, run } from "./db.ts";
 import { enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
 import { calibrateScoreByObtain, resolveDbMergeKey } from "./enrich/alias.ts";
 import { backfillAi } from "./ai-admin.ts";
-import { runAll, runSource, ensureSources } from "./collectors/index.ts";
+import { runAll, runSource, ensureSources, getSourceHints } from "./collectors/index.ts";
 import { lastDigests, runDaily } from "./digest.ts";
 import { getPushSettings, passesPushFilters } from "./push.ts";
 import { guessObtain } from "./enrich/obtain.ts";
@@ -79,7 +79,7 @@ async function main() {
           publishedAt: row.published_at,
           expiresAt: row.expires_at,
           tags,
-        }, row.source_id);
+        }, row.source_id, getSourceHints(row.source_id));
         if (!e) continue;
         let finalCategory = e.category;
         let finalObtain = row.obtain;
