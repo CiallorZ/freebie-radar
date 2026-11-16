@@ -85,11 +85,11 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-vpsxb", name: "VPS小站 · 特价主机", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsxb", url: "https://www.vpsxb.net/feed/", limit: 20, categoryHint: "vps" }] } },
   { id: "rss-lowendbox", name: "LowEndBox · VPS 优惠", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "lowendbox", url: "https://lowendbox.com/feed/", limit: 20 }] } },
   // 中文主机圈促销博客（2026-11-15 实测 RSS 可用，国内直连）
-  { id: rss-vpsjxw, name: VPS精选网 · 中文主机促销, kind: rss, enabled: true, intervalSec: 1800, config: { kindHint: deal, categoryHint: vps, feeds: [{ id: vpsjxw, url: https://www.vpsjxw.com/feed, limit: 20, categoryHint: vps }] } },
-  { id: rss-laozuo, name: 老左博客 · VPS 优惠, kind: rss, enabled: true, intervalSec: 1800, config: { kindHint: deal, categoryHint: vps, feeds: [{ id: laozuo, url: https://www.laozuo.org/feed, limit: 15, categoryHint: vps }] } },
-  { id: rss-veidc, name: VEIDC · 主机商促销, kind: rss, enabled: true, intervalSec: 1800, config: { kindHint: deal, categoryHint: vps, feeds: [{ id: veidc, url: https://www.veidc.com/feed, limit: 20, categoryHint: vps }] } },
-  { id: rss-vpser, name: VPS 侦探 · 主机优惠, kind: rss, enabled: true, intervalSec: 1800, config: { kindHint: deal, categoryHint: vps, feeds: [{ id: vpser, url: https://www.vpser.net/feed, limit: 15, categoryHint: vps }] } },
-  { id: rss-banwagong, name: 搬瓦工中文网 · 套餐与优惠, kind: rss, enabled: true, intervalSec: 3600, config: { kindHint: deal, categoryHint: vps, feeds: [{ id: banwagong, url: https://www.banwagong.net/feed, limit: 15, categoryHint: vps }] } },
+  { id: "rss-vpsjxw", name: "VPS精选网 · 中文主机促销", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsjxw", url: "https://www.vpsjxw.com/feed", limit: 20, categoryHint: "vps" }] } },
+  { id: "rss-laozuo", name: "老左博客 · VPS 优惠", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "laozuo", url: "https://www.laozuo.org/feed", limit: 15, categoryHint: "vps" }] } },
+  { id: "rss-veidc", name: "VEIDC · 主机商促销", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "veidc", url: "https://www.veidc.com/feed", limit: 20, categoryHint: "vps" }] } },
+  { id: "rss-vpser", name: "VPS 侦探 · 主机优惠", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpser", url: "https://www.vpser.net/feed", limit: 15, categoryHint: "vps" }] } },
+  { id: "rss-banwagong", name: "搬瓦工中文网 · 套餐与优惠", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "banwagong", url: "https://www.banwagong.net/feed", limit: 15, categoryHint: "vps" }] } },
 
   // === 游戏限免 / Key / 礼包 ===
   { id: "epic-free", name: "Epic Games · 本周喜加一", kind: "epic", enabled: true, intervalSec: 3600, config: { includeUpcoming: false } },
@@ -143,11 +143,11 @@ export const SEEDS: SourceSeed[] = [
   { id: "zhihu-search", name: "知乎 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费领取" } },
   { id: "xhs-search", name: "小红书 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费领取" } },
   { id: "xiaoheihe-search", name: "小黑盒 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费" } },
-  // NGA 需登录态 Cookie（ngaPassportUid / ngaPassportCid）：fid=570 优惠信息购物指南，国内羊毛主阵地
-  { id: "nga-deals", name: "NGA · 优惠信息购物指南", kind: "nga", enabled: true, intervalSec: 600, config: { fid: 570, forumName: "优惠信息购物指南" } },
+  // NGA 需登录态 Cookie（ngaPassportUid / ngaPassportCid）：fid=570 优惠信息购物指南，国内羊毛主阵地；未配 Cookie 前默认关闭（配好后在管理端启用，与 weibo-freebies 同理）
+  { id: "nga-deals", name: "NGA · 优惠信息购物指南", kind: "nga", enabled: false, intervalSec: 600, config: { fid: 570, forumName: "优惠信息购物指南" } },
   // 570 / 613 / 498 同属「杂谈 > 消费电子 IT新闻 (436)」下的子版；613 拼车拼单、498 二手交易
-  { id: "nga-carpool", name: "NGA · 分享活动买家互助（拼车拼单）", kind: "nga", enabled: true, intervalSec: 900, config: { fid: 613, forumName: "分享活动买家互助", categoryHint: "goods" } },
-  { id: "nga-trade", name: "NGA · 二手交易", kind: "nga", enabled: true, intervalSec: 1200, config: { fid: 498, forumName: "二手交易", categoryHint: "trade" } },
+  { id: "nga-carpool", name: "NGA · 分享活动买家互助（拼车拼单）", kind: "nga", enabled: false, intervalSec: 900, config: { fid: 613, forumName: "分享活动买家互助", categoryHint: "goods" } },
+  { id: "nga-trade", name: "NGA · 二手交易", kind: "nga", enabled: false, intervalSec: 1200, config: { fid: 498, forumName: "二手交易", categoryHint: "trade" } },
 // B站关键词搜索：wbi 签名免登录可用，抓「喜加一 / 白嫖 / 限免」类视频；内容为视频，靠 AI 一审判 kind
   { id: "bili-freebies", name: "B站 · 喜加一与白嫖搜索", kind: "bili", enabled: true, intervalSec: 1800, config: { keywords: ["免费领取", "白嫖", "喜加一", "限时免费"], limitPerKeyword: 15 } },
 // 微博：PC ajax 搜索 + 盯人，需 weibo.com 登录 Cookie（SUB）；无官方 RSS，RSSHub 公共实例已全挂
@@ -221,6 +221,8 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-leiphone", name: "雷锋网 · AI 与科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "leiphone", url: "https://www.leiphone.com/feed", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-tmtpost", name: "钛媒体 · 商业科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "tmtpost", url: "https://www.tmtpost.com/rss.xml", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-ifanr", name: "爱范儿 · 数码前沿", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "ifanr", url: "https://www.ifanr.com/feed", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-cnbeta", name: "cnBeta · 简明IT新闻", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "cnbeta", url: "https://www.cnbeta.com.tw/backend.php", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-36kr", name: "36氪 · 创业商业科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "36kr", url: "https://www.36kr.com/feed", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-gnews-biz", name: "Google News · 商业财经头条", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-biz", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 25, categoryHint: "finance" }] } },
   { id: "rss-gnews-cls", name: "财联社要闻（Google News）", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "stock", feeds: [{ id: "gnews-cls", url: "https://news.google.com/rss/search?q=site:cls.cn&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "stock" }] } },
   { id: "rss-gnews-yicai", name: "第一财经（Google News）", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-yicai", url: "https://news.google.com/rss/search?q=site:yicai.com&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "finance" }] } },
