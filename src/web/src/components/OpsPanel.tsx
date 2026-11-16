@@ -492,14 +492,16 @@ export function OpsPanel({
     runnerUrl: string;
     xhsProxy: string;
     sites: Record<
-      "zhihu" | "xhs" | "xiaoheihe",
-      { site: "zhihu" | "xhs" | "xiaoheihe"; configured: boolean; count: number; keyNames: string[]; hasAuthHint: boolean; updatedAt: string | null }
+      "zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo",
+      { site: "zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo"; configured: boolean; count: number; keyNames: string[]; hasAuthHint: boolean; updatedAt: string | null }
     >;
   } | null>(null);
-  const [cookieInputs, setCookieInputs] = useState<Record<"zhihu" | "xhs" | "xiaoheihe", string>>({
+  const [cookieInputs, setCookieInputs] = useState<Record<"zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo", string>>({
     zhihu: "",
     xhs: "",
     xiaoheihe: "",
+    nga: "",
+    weibo: "",
   });
   const [runnerUrlInput, setRunnerUrlInput] = useState("http://172.17.0.1:18790");
   const [xhsProxyInput, setXhsProxyInput] = useState("");
@@ -522,9 +524,9 @@ export function OpsPanel({
   }, []);
 
   const saveCookiePatch = async (
-    patch: { runnerUrl?: string; xhsProxy?: string; cookies?: Partial<Record<"zhihu" | "xhs" | "xiaoheihe", string>> },
+    patch: { runnerUrl?: string; xhsProxy?: string; cookies?: Partial<Record<"zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo", string>> },
     busyKey: string,
-    clearKey?: "zhihu" | "xhs" | "xiaoheihe",
+    clearKey?: "zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo",
   ): Promise<boolean> => {
     setCookieBusy(busyKey);
     try {
@@ -791,7 +793,7 @@ export function OpsPanel({
                   onClick={() => setShowIngestGuide((v) => !v)}
                   className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-surface px-3 py-1.5 text-[12px] font-medium text-ink-700 hover:border-brand-border hover:text-brand"
                 >
-                  <KeyRound size={13} /> {showIngestGuide ? "收起 Cookie 托管" : "Cookie 托管（知乎/小红书/小黑盒）"}
+                  <KeyRound size={13} /> {showIngestGuide ? "收起 Cookie 托管" : "Cookie 托管（知乎/小红书/小黑盒/NGA）"}
                 </button>
               <button
                 type="button"
@@ -862,13 +864,25 @@ export function OpsPanel({
                   </div>
                 </div>
 
-                {/* 三站 Cookie 粘贴卡 */}
-                <div className="grid gap-2.5 lg:grid-cols-3">
+                {/* 登录态站点 Cookie 粘贴卡 */}
+                <div className="grid gap-2.5 lg:grid-cols-2">
                   {(
                     [
-                      { key: "zhihu" as const, sourceId: "zhihu-search", title: "知乎（zhihu.com）", hint: "关键字段：z_c0 / d_c0" },
+{ key: "zhihu" as const, sourceId: "zhihu-search", title: "知乎（zhihu.com）", hint: "关键字段：z_c0 / d_c0" },
                       { key: "xhs" as const, sourceId: "xhs-search", title: "小红书（xiaohongshu.com）", hint: "关键字段：web_session / a1" },
                       { key: "xiaoheihe" as const, sourceId: "xiaoheihe-search", title: "小黑盒（xiaoheihe.cn）", hint: "关键字段：user_token / x_app_id" },
+                      {
+                        key: "nga" as const,
+                        sourceId: "nga-deals",
+                        title: "NGA（bbs.nga.cn）",
+                        hint: "关键字段：ngaPassportUid / ngaPassportCid（HTTP 直连，无需执行器）",
+                      },
+                      {
+                        key: "weibo" as const,
+                        sourceId: "weibo-freebies",
+                        title: "微博（weibo.com）",
+                        hint: "关键字段：SUB / SUBP（PC 端 ajax 直连，无需执行器）",
+                      },
                     ] as const
                   ).map((site) => {
                     const st = cookieStatus?.sites[site.key];

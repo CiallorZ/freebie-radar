@@ -3,6 +3,37 @@ import { all, get, run, type SqlValue } from "./db.ts";
 import { TitleDeduper } from "./enrich/dedup.ts";
 import { aiEnabled, config, pushEnabled } from "./config.ts";
 import { getCookieSettings, toPublicCookieStatus, updateCookieSettings, type CookieSiteKey } from "./cookie-store.ts";
+import { identityOf, loadUserStates, registerAuthRoutes, resolveIdentity, userByRssToken } from "./auth.ts";
+import {
+  createInviteCodes,
+  deleteInviteCode,
+  getAccessControl,
+  getOnboarding,
+  listInviteCodes,
+  listUsers,
+  saveAccessControl,
+  saveOnboarding,
+  setUserDisabled,
+  toggleInviteCode,
+  countUsers,
+} from "./access.ts";
+import {
+  detectTelegramChatIds,
+  dispatchUserPush,
+  flushUserBatches,
+  getUserPushConfig,
+  previewUserPush,
+  saveUserPushConfig,
+  userPushLogs,
+  userPushStats,
+  loadUserBlockRules,
+  loadUserSubscriptions,
+  resolveUserBotToken,
+  sendTelegramToUser,
+} from "./user-push.ts";
+import { buildRssXml, rssEtag, type RssItem } from "./rss.ts";
+import { checkForUpdate, getBuildInfo, getUpdateJob, hostUpdateCommand, runUpdate } from "./updater.ts";
+import { isPublicSite, siteMode } from "./config.ts";
 import {
   addCustomRssSource,
   BUILTIN_SOURCE_IDS,
@@ -17,6 +48,7 @@ import { buildHotReport, sourceQuality } from "./hot.ts";
 import { sendTelegram } from "./telegram.ts";
 import {
   DEFAULT_SETTINGS,
+  passesPushFilters,
   flushBatch,
   getPushSettings,
   isQuietNow,
@@ -158,6 +190,25 @@ function shape(row: ItemRow, keywords: string[] = [], blockedBy: string | null =
     matched: matchKeywords(row, keywords),
     blockedBy,
   };
+}
+
+/**
+ * 公开站：把「个人收藏 / 已读」覆盖到列表结果上。
+ * items 表里的 starred / read_at 是自建站的全局状态，公开站不能拿来给用户看，
+ * 否则 A 的收藏会显示成 B 的收藏。
+ */
+function applyUserStates<T extends { id: number; starred: boolean; read: boolean }>(list: T[], userId: number | null): T[] {
+  if (!userId || !list.length) return list;
+  const states = loadUserStates(
+    userId,
+    list.map((x) => x.id),
+  );
+  for (const it of list) {
+    const s = states.get(it.id);
+    it.starred = s?.starred ?? false;
+    it.read = s?.read ?? false;
+  }
+  return list;
 }
 
 const SORTS: Record<string, string> = {
@@ -308,12 +359,41 @@ function createClusterScope(): (kind: string | null | undefined, category: strin
     return index;
   };
 }
-function buildItemsQuery(q: Record<string, string | undefined>, rules: BlockRule[], includeBlocked: boolean) {
+/**
+ * scope 用于公开站：个人状态（关闭/收藏/已读）存在 user_item_states 里，
+ * 必须用自包含 EXISTS 子查询过滤 —— merge=1 时的窗口函数子查询只查 items 单表，
+ * 拿不到外层 JOIN 别名，写成 JOIN 会在 merge 模式下直接报错。
+ */
+type QueryScope = { userId: number | null; publicMode: boolean };
+
+function buildItemsQuery(
+  q: Record<string, string | undefined>,
+  rules: BlockRule[],
+  includeBlocked: boolean,
+  scope: QueryScope = { userId: null, publicMode: false },
+) {
   const where: string[] = [];
   const params: SqlValue[] = [];
 
   const status = q.status ?? "active";
-  if (status !== "all") {
+  if (scope.publicMode) {
+    // 公开站：ignored 等价于「我关掉了这条」，active 等价于「我没关」
+    if (scope.userId !== null) {
+      if (status === "ignored") {
+        where.push(
+          "EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.user_id = ? AND uis.item_id = items.id AND uis.hidden = 1)",
+        );
+        params.push(scope.userId);
+      } else if (status === "active") {
+        where.push(
+          "NOT EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.user_id = ? AND uis.item_id = items.id AND uis.hidden = 1)",
+        );
+        params.push(scope.userId);
+      }
+      // status=all：不做个人过滤
+    }
+    // 未登录访客：隐藏/收藏状态在浏览器 localStorage 里，服务端不参与过滤
+  } else if (status !== "all") {
     where.push("status = ?");
     params.push(status);
   }
@@ -351,8 +431,32 @@ function buildItemsQuery(q: Record<string, string | undefined>, rules: BlockRule
   }
   if (q.lang === "zh") where.push("is_zh(title) = 1");
   else if (q.lang === "en") where.push("is_zh(title) = 0");
-  if (q.starred === "1") where.push("starred = 1");
-  if (q.unread === "1") where.push("read_at IS NULL");
+  if (q.starred === "1") {
+    if (scope.publicMode) {
+      if (scope.userId !== null) {
+        where.push(
+          "EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.user_id = ? AND uis.item_id = items.id AND uis.starred = 1)",
+        );
+        params.push(scope.userId);
+      } else {
+        where.push("1 = 0");
+      }
+    } else {
+      where.push("starred = 1");
+    }
+  }
+  if (q.unread === "1") {
+    if (scope.publicMode) {
+      if (scope.userId !== null) {
+        where.push(
+          "NOT EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.user_id = ? AND uis.item_id = items.id AND uis.read_at IS NOT NULL)",
+        );
+        params.push(scope.userId);
+      }
+    } else {
+      where.push("read_at IS NULL");
+    }
+  }
   if (q.hasCodes === "1") where.push("codes != '[]' AND codes != ''");
   if (q.aiOnly === "1") where.push("ai_keep = 1");
   // 用 IS NOT 而不是 (IS NULL OR != 0)：OR 会让索引失效，5671 行要 27 秒
@@ -470,41 +574,71 @@ let regexBlockCache: { key: string; ids: number[] } = { key: "", ids: [] };
 /**
  * 公开读接口白名单：浏览、搜索、导出、健康检查都不需要密码。
  * 其余（推送/推送规则/AI/清理/屏蔽词/订阅/运维/采集）一律需要 ADMIN_TOKEN。
+ * 注意：公开站下「个人」写操作走 /api/me/*，不落在这里。
  */
-const PUBLIC_GET = [
+const PUBLIC_GET_EXACT = new Set([
+  "/api/auth/check",
   "/api/items",
   "/api/stats",
   "/api/sources",
   "/api/digests",
   "/api/export",
-  "/api/auth/check",
   "/api/hot",
-];
+  "/api/taxonomy",
+  "/api/source-quality",
+  "/api/site/bootstrap",
+  "/api/rss",
+]);
+
+const PUBLIC_GET_PREFIX = ["/api/items/", "/api/digests/"];
 
 let warnedNoAdminToken = false;
+let warnedAdminLocked = false;
 
 export function registerApi(app: Hono) {
-  // 管理端鉴权：未设置 ADMIN_TOKEN 时全部放行（保持旧部署不变）
+  /**
+   * 鉴权分层（顺序即优先级）：
+   *   1. 采集回传：独立 INGEST_TOKEN，自己校验
+   *   2. 登录/站点元信息：公开
+   *   3. /api/me/*：必须登录，且站点没暂停个人功能
+   *   4. 公开只读 GET
+   *   5. 其余：仅 ADMIN_TOKEN（OAuth 登录不构成管理权限）
+   */
   app.use("/api/*", async (c, next) => {
-    const token = config.adminToken;
-    if (!token) {
+    const identity = resolveIdentity(c);
+    c.set("identity" as never, identity as never);
+    const path = c.req.path;
+    const method = c.req.method;
+
+    if (path.startsWith("/api/ingest")) return next();
+    if (path.startsWith("/api/auth/") || path === "/api/site/bootstrap") return next();
+
+    if (path.startsWith("/api/me/")) {
+      if (!identity.user) return c.json({ error: "需要登录", needLogin: true }, 401);
+      if (identity.personalSuspended) return c.json({ error: "站点已暂停个人功能" }, 403);
+      return next();
+    }
+
+    if (method === "GET" && (PUBLIC_GET_EXACT.has(path) || PUBLIC_GET_PREFIX.some((p) => path.startsWith(p)))) {
+      return next();
+    }
+
+    if (identity.isAdmin) return next();
+
+    if (identity.adminLocked) {
+      if (!warnedAdminLocked) {
+        console.warn("[auth] 公开站未设置 ADMIN_TOKEN，管理接口已锁定");
+        warnedAdminLocked = true;
+      }
+      return c.json({ error: "站点未配置 ADMIN_TOKEN，管理区已锁定", needAuth: true, adminLocked: true }, 403);
+    }
+    if (!config.adminToken) {
       if (!warnedNoAdminToken) {
         console.warn("[auth] 未设置 ADMIN_TOKEN，管理接口对所有访问者开放");
         warnedNoAdminToken = true;
       }
       return next();
     }
-
-    const path = c.req.path;
-    const method = c.req.method;
-    // 采集器回传有独立的 INGEST_TOKEN，不归这里管
-    if (path.startsWith("/api/ingest")) return next();
-    // 公开只读
-    if (method === "GET" && PUBLIC_GET.some((p) => path === p || path.startsWith(p + "/"))) return next();
-
-    const auth = c.req.header("authorization") ?? "";
-    const given = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-    if (given && given === token) return next();
     return c.json({ error: "需要管理密码", needAuth: true }, 401);
   });
 
@@ -517,8 +651,20 @@ export function registerApi(app: Hono) {
     const offset = Math.max(Number(q.offset ?? 0), 0);
     const includeBlocked = q.includeBlocked === "1";
     const rules = loadActiveBlockRules();
+    const id = identityOf(c);
+    const scope: QueryScope = { userId: id.user?.id ?? null, publicMode: id.siteMode === "public" };
+    // 公开站未登录访客：个人收藏/已关闭在 localStorage，前端带 ids 列表来查
+    if (scope.publicMode && !scope.userId && q.ids) {
+      const ids = q.ids.split(",").map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n > 0).slice(0, 100);
+      if (!ids.length) return c.json({ total: 0, limit, offset, items: [] });
+      const rows = all<ItemRow>(
+        "SELECT * FROM items WHERE id IN (" + ids.map(() => "?").join(",") + ")",
+        ...ids,
+      );
+      return c.json({ total: rows.length, limit, offset, items: rows.map((r) => ({ ...shape(r, [], null), dupCount: 1 })) });
+    }
 
-    const { where, params, subKeywords } = buildItemsQuery(q, rules, includeBlocked);
+    const { where, params, subKeywords } = buildItemsQuery(q, rules, includeBlocked, scope);
     // 同一福利常被十几个源同时报道（Epic 喜加一尤甚），列表默认按 title_key 收敛：
     // 每组只保留最早入库的那条，前端按 dup_count 显示「N 个来源」并可展开。
     // 指定了单源或「我的收藏」时不做跨源合并，避免主记录落在别处导致本源条目被隐藏。
@@ -557,10 +703,13 @@ const keyOk = "LENGTH(CAST(title_key AS BLOB)) >= 6";
         total: rawTotal,
         limit,
         offset,
-        items: rows.map((r) => {
-          const hit = includeBlocked ? matchBlockRules(r, rules) : null;
-          return { ...shape(r, subKeywords, hit ? hit.pattern : null), dupCount: 1 };
-        }),
+        items: applyUserStates(
+          rows.map((r) => {
+            const hit = includeBlocked ? matchBlockRules(r, rules) : null;
+            return { ...shape(r, subKeywords, hit ? hit.pattern : null), dupCount: 1 };
+          }),
+          scope.userId,
+        ),
       });
     }
 
@@ -593,13 +742,16 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
       total,
       limit,
       offset,
-      items: page.map(({ row: r, dupCount }) => {
-        const hit = includeBlocked ? matchBlockRules(r, rules) : null;
-        return {
-          ...shape(r, subKeywords, hit ? hit.pattern : null),
-          dupCount,
-        };
-      }),
+      items: applyUserStates(
+        page.map(({ row: r, dupCount }) => {
+          const hit = includeBlocked ? matchBlockRules(r, rules) : null;
+          return {
+            ...shape(r, subKeywords, hit ? hit.pattern : null),
+            dupCount,
+          };
+        }),
+        scope.userId,
+      ),
     });
   });
 
@@ -666,8 +818,13 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
   app.get("/api/items/:id", (c) => {
     const row = get<ItemRow>("SELECT * FROM items WHERE id = ?", Number(c.req.param("id")));
     if (!row) return c.json({ error: "not found" }, 404);
-    const subKeywords = all<{ keyword: string }>("SELECT keyword FROM subscriptions").map((r) => r.keyword);
-    return c.json(shape(row, subKeywords));
+    const id = identityOf(c);
+    const pubUser = id.siteMode === "public" ? (id.user?.id ?? null) : null;
+    const subKeywords =
+      pubUser !== null
+        ? loadUserSubscriptions(pubUser)
+        : all<{ keyword: string }>("SELECT keyword FROM subscriptions").map((r) => r.keyword);
+    return c.json(applyUserStates([shape(row, subKeywords)], pubUser)[0]);
   });
 
   app.patch("/api/items/:id", async (c) => {
@@ -1072,16 +1229,27 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
       "SELECT COUNT(*) AS n FROM items WHERE COALESCE(published_at, first_seen_at) >= ?",
       new Date(Date.now() - 86_400_000).toISOString(),
     );
-    const blockRules = get<{ n: number }>("SELECT COUNT(*) AS n FROM block_rules WHERE enabled = 1")?.n ?? 0;
+    const id = identityOf(c);
+    const pubUser = id.siteMode === "public" ? (id.user?.id ?? null) : null;
+    const userTotals = pubUser
+      ? get<{ starred: number; hidden: number; read: number }>(
+          "SELECT SUM(starred) AS starred, SUM(hidden) AS hidden, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS read FROM user_item_states WHERE user_id = ?",
+          pubUser,
+        )
+      : undefined;
+    const blockRules =
+      pubUser
+        ? (get<{ n: number }>("SELECT COUNT(*) AS n FROM user_block_rules WHERE user_id = ? AND enabled = 1", pubUser)?.n ?? 0)
+        : (get<{ n: number }>("SELECT COUNT(*) AS n FROM block_rules WHERE enabled = 1")?.n ?? 0);
 
     return c.json({
       totals: {
         total: totals?.total ?? 0,
         active: totals?.active ?? 0,
-        starred: totals?.starred ?? 0,
+        starred: userTotals ? (userTotals.starred ?? 0) : (totals?.starred ?? 0),
         expired: totals?.expired ?? 0,
         withCodes: totals?.withCodes ?? 0,
-        unread: totals?.unread ?? 0,
+        unread: userTotals ? (totals?.active ?? 0) - (userTotals.read ?? 0) : (totals?.unread ?? 0),
         last24h: last24h?.n ?? 0,
         blockRules,
         aiKept: totals?.aiKept ?? 0,
@@ -1234,10 +1402,14 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
     if (auth !== "Bearer " + config.ingestToken) return c.json({ error: "unauthorized" }, 401);
     const body = (await c.req.json().catch(() => null)) as { sourceId?: string; items?: unknown[] } | null;
     if (!body?.sourceId || !Array.isArray(body.items)) return c.json({ error: "sourceId 与 items 必填" }, 400);
-    const items = body.items.filter((i): i is RawItem => {
-      const r = i as RawItem | null;
-      return Boolean(r && typeof r.title === "string" && typeof r.url === "string");
-    });
+    const items = body.items
+      .filter((i): i is RawItem => {
+        const r = i as RawItem | null;
+        return Boolean(r && typeof r.title === "string" && typeof r.url === "string");
+      })
+      // 外部脚本（油猴 / 本地 Playwright）不一定给 externalId，缺了就退回 URL，
+      // 否则会带着 undefined 绑到 SQLite 参数上直接 500
+      .map((r) => ({ ...r, externalId: r.externalId || r.url }));
     const saved = ingestItems(body.sourceId, items);
     return c.json({ ok: true, received: body.items.length, ...saved });
   });
@@ -1317,14 +1489,551 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
       : [];
     const orderMap = new Map(ids.map((id, i) => [id, i]));
     const items = [...rawItems].sort((a, b) => (orderMap.get(a.id) ?? 9999) - (orderMap.get(b.id) ?? 9999));
-    const subKeywords = all<{ keyword: string }>("SELECT keyword FROM subscriptions").map((r) => r.keyword);
+    const id = identityOf(c);
+    const subKeywords =
+      id.siteMode === "public" && id.user
+        ? loadUserSubscriptions(id.user.id)
+        : all<{ keyword: string }>("SELECT keyword FROM subscriptions").map((r) => r.keyword);
     return c.json({
       date: row.date,
       created_at: row.created_at,
       pushed_at: row.pushed_at,
       text,
       count: ids.length,
-      items: items.map((r) => shape(r, subKeywords)),
+      items: applyUserStates(
+        items.map((r) => shape(r, subKeywords)),
+        id.siteMode === "public" ? (id.user?.id ?? null) : null,
+      ),
     });
+  });
+
+  /* ================================================================== *
+   * 公开站：登录用户个人接口（/api/me/*）
+   * 与自建站的全局接口严格分开：这里只读写当前用户自己的数据。
+   * ================================================================== */
+
+  registerAuthRoutes(app);
+
+  const currentUserId = (c: any): number => {
+    const id = identityOf(c);
+    if (!id.user) throw new Error("需要登录");
+    return id.user.id;
+  };
+
+  function upsertUserState(
+    userId: number,
+    itemId: number,
+    patch: { hidden?: boolean; starred?: boolean; read?: boolean },
+  ): void {
+    const now = new Date().toISOString();
+    const cur = get<{ hidden: number; starred: number; read_at: string | null }>(
+      "SELECT hidden, starred, read_at FROM user_item_states WHERE user_id = ? AND item_id = ?",
+      userId,
+      itemId,
+    );
+    const hidden = patch.hidden ?? (cur?.hidden === 1);
+    const starred = patch.starred ?? (cur?.starred === 1);
+    const readAt = patch.read === undefined ? (cur?.read_at ?? null) : patch.read ? now : null;
+    run(
+      "INSERT INTO user_item_states (user_id, item_id, hidden, starred, read_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) " +
+        "ON CONFLICT(user_id, item_id) DO UPDATE SET hidden = excluded.hidden, starred = excluded.starred, read_at = excluded.read_at, updated_at = excluded.updated_at",
+      userId,
+      itemId,
+      hidden ? 1 : 0,
+      starred ? 1 : 0,
+      readAt,
+      now,
+    );
+  }
+
+  app.patch("/api/me/items/:id", async (c) => {
+    const userId = currentUserId(c);
+    const itemId = Number(c.req.param("id"));
+    if (!Number.isFinite(itemId)) return c.json({ error: "bad id" }, 400);
+    const body = (await c.req.json().catch(() => ({}))) as { starred?: boolean; status?: string; read?: boolean };
+    const patch: { hidden?: boolean; starred?: boolean; read?: boolean } = {};
+    if (typeof body.starred === "boolean") patch.starred = body.starred;
+    if (typeof body.read === "boolean") patch.read = body.read;
+    if (body.status === "ignored") patch.hidden = true;
+    else if (body.status === "active") patch.hidden = false;
+    if (!Object.keys(patch).length) return c.json({ error: "nothing to update" }, 400);
+    upsertUserState(userId, itemId, patch);
+    const row = get<ItemRow>("SELECT * FROM items WHERE id = ?", itemId);
+    if (!row) return c.json({ error: "not found" }, 404);
+    const shaped = shape(row, loadUserSubscriptions(userId));
+    return c.json(applyUserStates([shaped], userId)[0]);
+  });
+
+  app.post("/api/me/items/batch", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => null)) as { ids?: number[]; action?: string } | null;
+    if (!body?.ids?.length || !body.action) return c.json({ error: "ids 与 action 必填" }, 400);
+    const ids = body.ids.filter((n) => Number.isInteger(n)).slice(0, 200);
+    if (!ids.length) return c.json({ updated: 0 });
+    for (const itemId of ids) {
+      if (body.action === "read") upsertUserState(userId, itemId, { read: true });
+      else if (body.action === "unread") upsertUserState(userId, itemId, { read: false });
+      else if (body.action === "ignore") upsertUserState(userId, itemId, { hidden: true });
+      else if (body.action === "restore") upsertUserState(userId, itemId, { hidden: false });
+      else return c.json({ error: "unsupported action" }, 400);
+    }
+    return c.json({ ok: true, updated: ids.length });
+  });
+
+  /** 访客在 localStorage 攒的偏好，登录后一键合并到账号 */
+  app.post("/api/me/items/import-guest", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => null)) as {
+      hidden?: number[];
+      starred?: number[];
+      read?: number[];
+    } | null;
+    if (!body) return c.json({ error: "invalid json" }, 400);
+    const clean = (arr: unknown): number[] =>
+      Array.isArray(arr) ? arr.filter((n): n is number => Number.isInteger(n) && n > 0).slice(0, 500) : [];
+    let imported = 0;
+    for (const id of clean(body.hidden)) { upsertUserState(userId, id, { hidden: true }); imported += 1; }
+    for (const id of clean(body.starred)) { upsertUserState(userId, id, { starred: true }); imported += 1; }
+    for (const id of clean(body.read)) { upsertUserState(userId, id, { read: true }); imported += 1; }
+    return c.json({ ok: true, imported });
+  });
+
+  app.get("/api/me/overview", (c) => {
+    const userId = currentUserId(c);
+    const id = identityOf(c);
+    const totals = get<{ starred: number; hidden: number; read: number }>(
+      "SELECT SUM(starred) AS starred, SUM(hidden) AS hidden, SUM(CASE WHEN read_at IS NOT NULL THEN 1 ELSE 0 END) AS read FROM user_item_states WHERE user_id = ?",
+      userId,
+    );
+    return c.json({
+      user: id.user,
+      totals: {
+        starred: totals?.starred ?? 0,
+        hidden: totals?.hidden ?? 0,
+        read: totals?.read ?? 0,
+      },
+      push: userPushStats(userId),
+      blockRules: get<{ n: number }>("SELECT COUNT(*) AS n FROM user_block_rules WHERE user_id = ? AND enabled = 1", userId)?.n ?? 0,
+      subscriptions: get<{ n: number }>("SELECT COUNT(*) AS n FROM user_subscriptions WHERE user_id = ?", userId)?.n ?? 0,
+    });
+  });
+
+  /* ---- 个人屏蔽词 ---- */
+  app.get("/api/me/block-rules", (c) => {
+    const userId = currentUserId(c);
+    const rules = all<BlockRule>(
+      "SELECT id, pattern, mode, scope, enabled, created_at FROM user_block_rules WHERE user_id = ? ORDER BY id DESC",
+      userId,
+    );
+    const activeItems = all<{ id: number; source_id: string; title: string; summary: string | null }>(
+      "SELECT id, source_id, title, summary FROM items WHERE status = 'active'",
+    );
+    const enriched = rules.map((r) => {
+      const matcher = compileRule(r);
+      let hits = 0;
+      for (const it of activeItems) {
+        if (matcher(it.title + " " + (it.summary ?? ""), it.source_id)) hits += 1;
+      }
+      return { ...r, enabled: r.enabled === 1, hits };
+    });
+    const enabledRules = rules.filter((r) => r.enabled === 1);
+    let totalBlocked = 0;
+    if (enabledRules.length) {
+      const matchers = enabledRules.map((r) => compileRule(r));
+      for (const it of activeItems) {
+        const text = it.title + " " + (it.summary ?? "");
+        if (matchers.some((m) => m(text, it.source_id))) totalBlocked += 1;
+      }
+    }
+    const cfg = getUserPushConfig(userId);
+    return c.json({ rules: enriched, totalBlocked, presets: PRESET_NOISE_PATTERNS, useGlobalBlocks: cfg.useGlobalBlocks });
+  });
+
+  app.post("/api/me/block-rules", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => null)) as {
+      pattern?: string;
+      mode?: string;
+      scope?: string;
+      presets?: boolean;
+    } | null;
+    const now = new Date().toISOString();
+    if (body?.presets) {
+      for (const pr of PRESET_NOISE_PATTERNS) {
+        run(
+          "INSERT INTO user_block_rules (user_id, pattern, mode, scope, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT(user_id, pattern, scope) DO UPDATE SET enabled = 1",
+          userId, pr.pattern, pr.mode, pr.scope, now,
+        );
+      }
+      return c.json({ ok: true, added: PRESET_NOISE_PATTERNS.length });
+    }
+    const pattern = (body?.pattern ?? "").trim();
+    if (!pattern || pattern.length > 80) return c.json({ error: "pattern 必填且不超过 80 字" }, 400);
+    const mode = body?.mode === "regex" ? "regex" : "keyword";
+    if (mode === "regex") {
+      try { new RegExp(pattern, "i"); } catch { return c.json({ error: "正则表达式语法无效" }, 400); }
+    }
+    const scope = (body?.scope ?? "all").trim() || "all";
+    run(
+      "INSERT INTO user_block_rules (user_id, pattern, mode, scope, enabled, created_at) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT(user_id, pattern, scope) DO UPDATE SET mode = excluded.mode, enabled = 1",
+      userId, pattern, mode, scope, now,
+    );
+    return c.json({ ok: true });
+  });
+
+  app.patch("/api/me/block-rules/:id", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => ({}))) as { enabled?: boolean };
+    if (typeof body.enabled !== "boolean") return c.json({ error: "enabled required" }, 400);
+    run("UPDATE user_block_rules SET enabled = ? WHERE id = ? AND user_id = ?", body.enabled ? 1 : 0, Number(c.req.param("id")), userId);
+    return c.json({ ok: true });
+  });
+
+  app.delete("/api/me/block-rules/:id", (c) => {
+    const userId = currentUserId(c);
+    run("DELETE FROM user_block_rules WHERE id = ? AND user_id = ?", Number(c.req.param("id")), userId);
+    return c.json({ ok: true });
+  });
+
+  /* ---- 个人关注词 ---- */
+  app.get("/api/me/subscriptions", (c) => {
+    const userId = currentUserId(c);
+    const rows = all<{ id: number; keyword: string; created_at: string; last_hit_at: string | null }>(
+      "SELECT id, keyword, created_at, last_hit_at FROM user_subscriptions WHERE user_id = ? ORDER BY keyword",
+      userId,
+    );
+    const hits = get<{ n: number }>("SELECT COUNT(*) AS n FROM items WHERE status = 'active'")?.n ?? 0;
+    return c.json({ subscriptions: rows, activeItems: hits });
+  });
+
+  app.post("/api/me/subscriptions", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => null)) as { keyword?: string } | null;
+    const keyword = (body?.keyword ?? "").trim();
+    if (!keyword || keyword.length > 40) return c.json({ error: "keyword 必填且不超过 40 字" }, 400);
+    run(
+      "INSERT INTO user_subscriptions (user_id, keyword, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id, keyword) DO NOTHING",
+      userId, keyword, new Date().toISOString(),
+    );
+    const rows = all<{ id: number; keyword: string; created_at: string; last_hit_at: string | null }>(
+      "SELECT id, keyword, created_at, last_hit_at FROM user_subscriptions WHERE user_id = ? ORDER BY keyword",
+      userId,
+    );
+    return c.json({ subscriptions: rows });
+  });
+
+  app.delete("/api/me/subscriptions/:id", (c) => {
+    const userId = currentUserId(c);
+    run("DELETE FROM user_subscriptions WHERE id = ? AND user_id = ?", Number(c.req.param("id")), userId);
+    const rows = all<{ id: number; keyword: string; created_at: string; last_hit_at: string | null }>(
+      "SELECT id, keyword, created_at, last_hit_at FROM user_subscriptions WHERE user_id = ? ORDER BY keyword",
+      userId,
+    );
+    return c.json({ subscriptions: rows });
+  });
+
+  /* ---- 个人 Telegram Bot 推送 ---- */
+  app.get("/api/me/push", (c) => {
+    const userId = currentUserId(c);
+    const cfg = getUserPushConfig(userId);
+    return c.json({
+      config: cfg,
+      settings: cfg.settings,
+      defaults: DEFAULT_SETTINGS,
+      stats: userPushStats(userId),
+      quiet: isQuietNow(cfg.settings),
+      channel: "telegram",
+      ready: cfg.enabled && cfg.hasToken && Boolean(cfg.chatId),
+      caps: { maxPerHour: config.userPushMaxPerHour, maxPerInstant: config.userPushMaxPerInstant },
+    });
+  });
+
+  app.patch("/api/me/push", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return c.json({ error: "无效的请求体" }, 400);
+    try {
+      const cfg = saveUserPushConfig(userId, body as never);
+      return c.json({ config: cfg, settings: cfg.settings, stats: userPushStats(userId), quiet: isQuietNow(cfg.settings) });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+    }
+  });
+
+  app.post("/api/me/push/detect-chat", async (c) => {
+    const userId = currentUserId(c);
+    const body = (await c.req.json().catch(() => ({}))) as { botToken?: string };
+    let token = (body.botToken ?? "").trim();
+    if (!token) {
+      token = resolveUserBotToken(userId) ?? "";
+      if (!token) return c.json({ error: "请先填写 Bot Token" }, 400);
+    }
+    try {
+      const chats = await detectTelegramChatIds(token);
+      return c.json({ ok: true, chats });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+    }
+  });
+
+  app.post("/api/me/push/test", async (c) => {
+    const userId = currentUserId(c);
+    const cfg = getUserPushConfig(userId);
+    const viaWebhook = cfg.settings.deliverVia === "webhook";
+    if (viaWebhook ? !cfg.settings.webhookUrl : !cfg.hasToken || !cfg.chatId)
+      return c.json({ error: viaWebhook ? "请先保存 webhook 地址" : "请先保存 Bot Token 与 Chat ID" }, 400);
+    try {
+      await sendTelegramToUser(userId, "🛰 资源雷达 · 个人推送测试消息\n" + new Date().toLocaleString("zh-CN"));
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+    }
+  });
+
+  app.get("/api/me/push/preview", (c) => {
+    const userId = currentUserId(c);
+    return c.json(previewUserPush(userId, Math.min(Math.max(Number(c.req.query("limit") ?? 6), 1), 12)));
+  });
+
+  app.post("/api/me/push/flush", async (c) => {
+    const userId = currentUserId(c);
+    const sent = await flushUserBatches(true);
+    return c.json({ ok: true, sent, queued: userPushStats(userId).queued });
+  });
+
+  app.get("/api/me/push/log", (c) => {
+    const userId = currentUserId(c);
+    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 30), 1), 100);
+    return c.json({ logs: userPushLogs(userId, limit) });
+  });
+
+  /* ================================================================== *
+   * 站长管理：访问控制 / 邀请码 / 用户 / 公告 / 版本更新
+   * 全部要求 isAdmin（ADMIN_TOKEN），OAuth 登录不构成管理权限
+   * ================================================================== */
+
+  app.get("/api/admin/overview", async (c) => {
+    const info = await getBuildInfo();
+    return c.json({
+      siteMode,
+      build: info,
+      access: getAccessControl(),
+      onboarding: getOnboarding(),
+      users: countUsers(),
+      invites: listInviteCodes().codes.length,
+      hostUpdateCommand: hostUpdateCommand(),
+    });
+  });
+
+  app.get("/api/admin/access", (c) => c.json({ access: getAccessControl() }));
+
+  app.patch("/api/admin/access", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return c.json({ error: "无效的请求体" }, 400);
+    return c.json({ access: saveAccessControl(body as never) });
+  });
+
+  app.get("/api/admin/invites", (c) => c.json(listInviteCodes()));
+
+  app.post("/api/admin/invites", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as {
+      count?: number;
+      maxUses?: number;
+      note?: string;
+      expiresDays?: number;
+      customCode?: string;
+    };
+    const created = createInviteCodes({
+      count: Number(body.count ?? 1),
+      maxUses: Number(body.maxUses ?? 1),
+      note: body.note,
+      expiresDays: Number(body.expiresDays ?? 0),
+      customCode: body.customCode,
+    });
+    return c.json({ ok: true, created, ...listInviteCodes() });
+  });
+
+  app.patch("/api/admin/invites/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { disabled?: boolean };
+    if (typeof body.disabled !== "boolean") return c.json({ error: "disabled required" }, 400);
+    const ok = toggleInviteCode(Number(c.req.param("id")), body.disabled);
+    return c.json({ ok, ...listInviteCodes() });
+  });
+
+  app.delete("/api/admin/invites/:id", (c) => {
+    const ok = deleteInviteCode(Number(c.req.param("id")));
+    return c.json({ ok, ...listInviteCodes() });
+  });
+
+  app.get("/api/admin/users", (c) => c.json({ users: listUsers(Number(c.req.query("limit") ?? 200)) }));
+
+  app.patch("/api/admin/users/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { disabled?: boolean };
+    if (typeof body.disabled !== "boolean") return c.json({ error: "disabled required" }, 400);
+    const ok = setUserDisabled(Number(c.req.param("id")), body.disabled);
+    return c.json({ ok });
+  });
+
+  app.get("/api/admin/onboarding", (c) => c.json({ onboarding: getOnboarding() }));
+
+  app.patch("/api/admin/onboarding", async (c) => {
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body) return c.json({ error: "无效的请求体" }, 400);
+    return c.json({ onboarding: saveOnboarding(body as never) });
+  });
+
+  app.get("/api/admin/update/check", async (c) => {
+    try {
+      return c.json(await checkForUpdate());
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  });
+
+  app.get("/api/admin/update/status", (c) => c.json({ job: getUpdateJob() }));
+
+  app.post("/api/admin/update/run", async (c) => {
+    try {
+      return c.json({ job: await runUpdate() });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  });
+
+  /* ================================================================== *
+   * 项目自身 RSS 2.0 输出
+   *   /rss.xml            公开 Feed（可带筛选参数）
+   *   /api/rss            同上，给不方便走根路径的客户端
+   *   /rss/u/:token.xml   个人专属 Feed（自动套用个人隐藏与个人屏蔽词）
+   * ================================================================== */
+
+  function rssQuery(
+    q: Record<string, string | undefined>,
+    rules: BlockRule[],
+    scope: QueryScope,
+    limit: number,
+  ): RssItem[] {
+    const { where, params } = buildItemsQuery({ ...q, status: q.status ?? "active" }, rules, false, scope);
+    const clause = where.length ? "WHERE " + where.join(" AND ") : "";
+    return all<RssItem>(
+      "SELECT id, source_id, title, url, summary, content, category, kind, score, price, is_free, obtain, codes, " +
+        "published_at, first_seen_at, expires_at, image_url, ai FROM items " + clause +
+        " ORDER BY COALESCE(published_at, first_seen_at) DESC LIMIT ?",
+      ...params,
+      limit,
+    );
+  }
+
+  function codesOf(raw: string): string[] {
+    try {
+      const arr = JSON.parse(raw || "[]") as unknown;
+      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function aiKeepOf(raw: string | null): boolean | null {
+    if (!raw) return null;
+    try {
+      const o = JSON.parse(raw) as { keep?: unknown };
+      return typeof o.keep === "boolean" ? o.keep : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function baseUrl(c: any): string {
+    const configured = config.publicBaseUrl;
+    if (configured) return configured.replace(/\/+$/, "");
+    try {
+      return new URL(c.req.url).origin;
+    } catch {
+      return "";
+    }
+  }
+
+  function sendFeed(c: any, items: RssItem[], title: string, description: string, selfPath: string, salt: string) {
+    const etag = rssEtag(items, salt);
+    if (c.req.header("if-none-match") === etag) return c.body(null, 304);
+    const xml = buildRssXml(items, {
+      title,
+      link: baseUrl(c) + "/",
+      description,
+      selfUrl: baseUrl(c) + selfPath,
+      limit: items.length,
+    });
+    c.header("Content-Type", "application/rss+xml; charset=utf-8");
+    c.header("Cache-Control", "public, max-age=300");
+    c.header("ETag", etag);
+    return c.body(xml);
+  }
+
+  const publicFeed = (c: any) => {
+    const q = c.req.query();
+    const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 100);
+    const rules = loadActiveBlockRules();
+    const items = rssQuery(q, rules, { userId: null, publicMode: false }, limit);
+    const qs = new URLSearchParams(q as Record<string, string>).toString();
+    return sendFeed(
+      c,
+      items,
+      "资源雷达 · 福利订阅",
+      "全网福利、黑五好价、拼车交易、开源项目与新闻资讯的聚合订阅",
+      "/rss.xml" + (qs ? "?" + qs : ""),
+      "public",
+    );
+  };
+  app.get("/rss.xml", publicFeed);
+  app.get("/api/rss", publicFeed);
+
+  app.get("/rss/u/:file", (c) => {
+    const file = c.req.param("file");
+    const token = file.replace(/\.xml$/i, "");
+    const user = userByRssToken(token);
+    if (!user) return c.text("RSS 链接无效或已被重置", 404);
+    const q = c.req.query();
+    const mode = q.mode === "push" || q.mode === "subs" ? q.mode : "feed";
+    const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 100);
+    const cfg = getUserPushConfig(user.id);
+    const rules = loadUserBlockRules(user.id, cfg.useGlobalBlocks);
+    let items = rssQuery(q, rules, { userId: user.id, publicMode: true }, mode === "feed" ? limit : 200);
+
+    if (mode === "push") {
+      items = items.filter((it) =>
+        passesPushFilters(
+          {
+            sourceId: it.source_id,
+            title: it.title,
+            summary: it.summary,
+            score: it.score,
+            codes: codesOf(it.codes),
+            price: it.price,
+            isFree: it.is_free === 1,
+            aiKeep: aiKeepOf(it.ai),
+            kind: it.kind,
+            category: it.category,
+            obtain: it.obtain,
+            publishedAt: it.published_at,
+          },
+          cfg.settings,
+        ),
+      );
+    } else if (mode === "subs") {
+      const subs = loadUserSubscriptions(user.id).map((k) => k.toLowerCase());
+      items = items.filter((it) => {
+        const hay = (it.title + " " + (it.summary ?? "")).toLowerCase();
+        return subs.some((k) => hay.includes(k));
+      });
+    }
+
+    return sendFeed(
+      c,
+      items.slice(0, limit),
+      "资源雷达 · " + (user.name ?? user.username) + " 的订阅",
+      mode === "push" ? "按我的推送规则输出" : mode === "subs" ? "只包含我关注的关键词" : "我的个人订阅（已排除我关掉的条目）",
+      "/rss/u/" + token + ".xml" + (mode !== "feed" ? "?mode=" + mode : ""),
+      "user-" + user.id + "-" + mode,
+    );
   });
 }

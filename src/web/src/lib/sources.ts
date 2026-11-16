@@ -71,6 +71,7 @@ export function groupOfSource(s: Source): SourceGroupKey {
     id === "rss-nodeloc" ||
     id === "rss-meta-appinn" ||
     id.endsWith("-search") ||
+    id.startsWith("nga-") ||
     id === "tg-cn-deals"
   ) {
     return "community";

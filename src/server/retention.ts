@@ -96,7 +96,7 @@ export function runCleanup(s?: RetentionSettings, dryRun = false): CleanupReport
     {
       label: "过期非福利条目",
       sql: `DELETE FROM items
-            WHERE starred = 0 AND status = 'active'
+            WHERE starred = 0 AND NOT EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.item_id = items.id AND uis.starred = 1)
               AND COALESCE(ai_keep, 0) != 1
               AND COALESCE(published_at, first_seen_at) < ?`,
       params: [iso(cfg.itemDays)],
@@ -104,14 +104,14 @@ export function runCleanup(s?: RetentionSettings, dryRun = false): CleanupReport
     {
       label: "过期福利条目",
       sql: `DELETE FROM items
-            WHERE starred = 0
+            WHERE starred = 0 AND NOT EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.item_id = items.id AND uis.starred = 1)
               AND COALESCE(ai_keep, 0) = 1
               AND COALESCE(published_at, first_seen_at) < ?`,
       params: [iso(cfg.keptDays)],
     },
     {
       label: "手动关闭的条目",
-      sql: `DELETE FROM items WHERE starred = 0 AND status = 'ignored' AND COALESCE(published_at, first_seen_at) < ?`,
+      sql: `DELETE FROM items WHERE starred = 0 AND NOT EXISTS (SELECT 1 FROM user_item_states uis WHERE uis.item_id = items.id AND uis.starred = 1) AND status = 'ignored' AND COALESCE(published_at, first_seen_at) < ?`,
       params: [iso(cfg.ignoredDays)],
     },
     {

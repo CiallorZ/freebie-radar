@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { Hono } from "hono";
 
+// 测试要可重复：不读本机 .env 的站点模式与管理令牌（否则本机配了 public/ADMIN_TOKEN 就会 401/403）
 process.env.DATABASE_PATH = ":memory:";
+process.env.SITE_MODE = "selfhost";
+process.env.ADMIN_TOKEN = "";
 
 const { migrate, run, get, closeDb } = await import("../src/server/db.ts");
 const { ensureSources } = await import("../src/server/collectors/index.ts");

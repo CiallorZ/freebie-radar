@@ -75,6 +75,12 @@ export type PushSettings = {
   quietEnabled: boolean;
   /** 静默时段 "23:30-08:00" */
   quietHours: string;
+  /** 投递渠道：telegram 用个人 Bot，webhook 用自定义 HTTP 端点（QQ 桥 / Bark / 飞书 / Slack 都能接） */
+  deliverVia: "telegram" | "webhook";
+  /** webhook 地址，POST JSON；留空则不投递 */
+  webhookUrl: string;
+  /** 可选：随请求带 X-Radar-Secret 头，方便接收端校验来源 */
+  webhookSecret: string;
   /** 静默时段行为：batch = 转入攒批早上发；drop = 静默期内不发送也不攒批 */
   quietAction: QuietAction;
   /** 静默时段按哪个时区算 */
@@ -134,6 +140,9 @@ export const DEFAULT_SETTINGS: PushSettings = {
   maxPerBatch: 8,
   quietEnabled: true,
   quietHours: "23:30-08:00",
+  deliverVia: "telegram",
+  webhookUrl: "",
+  webhookSecret: "",
   quietAction: "batch",
   timezone: "Asia/Shanghai",
   maxAgeHours: 72,
@@ -253,7 +262,10 @@ function normalizeSettings(raw: Partial<PushSettings>, base: PushSettings = DEFA
     batchIntervalMin: numOr(raw.batchIntervalMin, base.batchIntervalMin, 0, 720),
     maxPerBatch: numOr(raw.maxPerBatch, base.maxPerBatch, 1, 20),
     quietEnabled: typeof raw.quietEnabled === "boolean" ? raw.quietEnabled : base.quietEnabled,
-    quietHours: typeof raw.quietHours === "string" ? raw.quietHours : base.quietHours,
+  quietHours: typeof raw.quietHours === "string" ? raw.quietHours : base.quietHours,
+  deliverVia: raw.deliverVia === "webhook" ? "webhook" : "telegram",
+  webhookUrl: typeof raw.webhookUrl === "string" ? raw.webhookUrl.trim().slice(0, 500) : base.webhookUrl,
+  webhookSecret: typeof raw.webhookSecret === "string" ? raw.webhookSecret.trim().slice(0, 200) : base.webhookSecret,
     quietAction: raw.quietAction === "drop" || raw.quietAction === "batch" ? raw.quietAction : base.quietAction,
     timezone: typeof raw.timezone === "string" && raw.timezone ? raw.timezone : base.timezone,
     maxAgeHours: numOr(raw.maxAgeHours, base.maxAgeHours, 0, 720),
@@ -744,7 +756,7 @@ export function startPushScheduler(): void {
  * 消息组装
  * ------------------------------------------------------------------ */
 
-function parseAiMeta(aiRaw: string | null): { aiKeep: boolean | null; aiReason: string | null } {
+export function parseAiMeta(aiRaw: string | null): { aiKeep: boolean | null; aiReason: string | null } {
   if (!aiRaw) return { aiKeep: null, aiReason: null };
   try {
     const parsed = JSON.parse(aiRaw) as { keep?: boolean; reason?: string };
@@ -757,7 +769,7 @@ function parseAiMeta(aiRaw: string | null): { aiKeep: boolean | null; aiReason: 
   }
 }
 
-function itemBlock(sourceId: string, it: FreshItem, s: PushSettings, seq?: number, subHits: string[] = []): string[] {
+export function itemBlock(sourceId: string, it: FreshItem, s: PushSettings, seq?: number, subHits: string[] = []): string[] {
   const lines: string[] = [];
   const prefix = seq === undefined ? "" : seq + ". ";
   const meta: string[] = [sourceLabel(sourceId)];

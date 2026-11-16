@@ -23,6 +23,8 @@ RUN npm i -g pnpm@10 \
     && rm -rf /root/.local/share/pnpm /root/.npm /tmp/*
 COPY --from=build /app/dist ./dist
 COPY src/server ./src/server
+# 前端与后端共用的分类口径（src/shared）必须在运行时可见，否则 node 直接 ERR_MODULE_NOT_FOUND
+COPY src/shared ./src/shared
 COPY tsconfig.json ./
 RUN mkdir -p /data
 EXPOSE 8788

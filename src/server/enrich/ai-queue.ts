@@ -1,6 +1,6 @@
 import { getAiSettings, reviewItems, type AiVerdict } from "./ai-settings.ts";
 import { dedupeKeptItemsWithAi } from "./ai-dedup.ts";
-import { FREEBIE_ONLY_SOURCES, isCategory, resolveKind, type ContentKind } from "./index.ts";
+import { demoteOfflineCategory, FREEBIE_ONLY_SOURCES, isCategory, resolveKind, type ContentKind } from "./index.ts";
 import { calibrateScoreByObtain } from "./alias.ts";
 import type { RawItem } from "../collectors/types.ts";
 import { get, run } from "../db.ts";
@@ -111,19 +111,26 @@ function applyVerdictToItem(itemId: number, verdict: AiVerdict): AppliedVerdict 
       "SELECT score, base_score, ai_keep, obtain, category, title, summary, source_id, is_free, price, published_at, codes FROM items WHERE id = ?",
       itemId,
     );
-    const effectiveCategory = nextCategory ?? cur?.category ?? null;
+    const rawCategory = nextCategory ?? cur?.category ?? null;
     const effectiveObtain = nextObtain ?? cur?.obtain ?? null;
     const effectiveKind = resolveKind(verdict.kind, verdict.keep, {
       title: cur?.title ?? "",
       summary: cur?.summary ?? "",
       sourceId: cur?.source_id,
-      category: effectiveCategory,
+      category: rawCategory,
       obtain: effectiveObtain,
       isFree: cur?.is_free === 1,
       price: cur?.price ?? null,
       freebieOnlySource: Boolean(cur?.source_id && FREEBIE_ONLY_SOURCES.has(cur.source_id)),
       kindHint: readSourceKindHint(cur?.source_id),
     });
+    // 资讯/水帖不许落进实地福利：AI 标错时统一降级到兜底分类
+    const effectiveCategory = demoteOfflineCategory(
+      rawCategory,
+      effectiveKind,
+      cur?.title ?? "",
+      cur?.summary ?? "",
+    );
     const effectiveKeep = effectiveKind === "noise" ? false : verdict.keep;
     const keep = effectiveKeep ? 1 : 0;
     const nextScore = cur
@@ -159,7 +166,7 @@ codes: parseCodes(cur.codes),
       effectiveKind,
       nextQuality,
       nextObtain,
-      nextCategory,
+      effectiveCategory,
       nextScore,
       new Date().toISOString(),
       itemId,

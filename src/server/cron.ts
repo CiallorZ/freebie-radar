@@ -73,6 +73,8 @@ export function startIntervalScheduler(task: {
         } catch (err) {
           log(`[cron] ${id} 失败: ${err instanceof Error ? err.message : String(err)}`);
         }
+        // 生产调度与 CLI 共用源间间隔，避免连续请求被上游 429（E2）
+        if (config.sourceGapMs > 0) await new Promise((r) => setTimeout(r, config.sourceGapMs));
       }
     } catch (err) {
       log(`[cron] 调度异常: ${err instanceof Error ? err.message : String(err)}`);

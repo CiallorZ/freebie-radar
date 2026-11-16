@@ -228,3 +228,188 @@ Reddit 对同一 IP 的 `.rss` 请求限制极严：并发 4 路会全 429，串
 ### 探测后仍不可用
 
 `bensbargains` / `hunt4freebies` / `greenmangaming` / `epic_free_page` / `steamgifts` 均 403；`xbox_gwg` 404；`sampleaday` / `free_app_watch` 域名不可解析；`humblebundle` API 403、页面需 JS；`fanatical` API 返回 249KB 但结构为混合页面数据，未找到免费列表字段；`itch.io` 无 JSON 接口（`/games/free.json` 404）。
+
+## 9. 第四批源：国内社区与中文主机圈（2026-11-15 实测）
+
+按「国内源还不够」的要求，重点补 NGA 这类国内社区，并顺带扫了一遍中文羊毛/主机/游戏/试用站点。
+
+### 9.1 NGA 玩家社区（必须登录态）
+
+| 入口 | 结果 |
+|---|---|
+| `bbs.nga.cn/thread.php?fid=-7` | 403，HTML 标题「未登录」 |
+| `bbs.nga.cn/thread.php?fid=570&__output=11` | 403，`{"error":["15:访客不能直接访问",...]}` |
+| `nga.178.com` / `ngabbs.com` / `g.nga.cn` 同参数 | 全部 403，错误码一致 |
+| 加 `Cookie: guestJs=<秒级时间戳>` | 仍 403（`guestJs` 只是前端时间戳，不是登录态） |
+| `app.nga.cn/app_api.php` | 404（旧 App 接口已下线） |
+
+结论：NGA 已全面改为**登录可见**，唯一的可行路径是用户登录后取 `ngaPassportUid` + `ngaPassportCid` 两个 Cookie（第三方 UWP 客户端同款做法）。
+
+落地：`src/server/collectors/nga.ts`（kind=`nga`），走 **HTTP + 托管 Cookie**，不需要无头浏览器：
+1. 主通道 `thread.php?fid=<fid>`（GBK HTML，正则取 `/read.php?tid=` 锚点）；
+2. 备通道 `thread.php?fid=<fid>&__output=11`（UTF-8 JSON，解析 `data.__T`）。
+Cookie 存进既有的 Cookie 托管（新增 site key `nga`，`hasCookieConfiguredForSource` 对 NGA 不要求 VPS 执行器）。
+默认源 `nga-deals` → **fid=570 优惠信息购物指南**（羊毛/优惠主版块），间隔 600s。
+
+未配置 Cookie 时的报错是明确的：`未配置 NGA Cookie，请在「数据源运维 → Cookie 托管」粘贴 ngaPassportUid / ngaPassportCid`。
+
+### 9.2 中文主机圈促销（已启用，零配置）
+
+| 源 id | 入口 | 实测 |
+|---|---|---|
+| `rss-vpsjxw` | `vpsjxw.com/feed` | 200 / 10 条（双十一特价、原生 IP、住宅 IP 系列） |
+| `rss-laozuo` | `laozuo.org/feed` | 200 / 10 条（RAKSmart 等线路测评+促销） |
+| `rss-veidc` | `veidc.com/feed` | 200 / 20 条（黑五/双11 主机商折扣合集） |
+| `rss-vpser` | `vpser.net/feed` | 200 / 10 条（EdgeNAT、HHOST 等月付折扣） |
+| `rss-banwagong` | `banwagong.net/feed` | 200 / 10 条（搬瓦工套餐与优惠码） |
+
+本地实测入库 60 条，分类落在 `vps` / `deal`，评分 66-75，无需任何代理。
+
+### 9.3 探测后放弃（本轮新增证据）
+
+| 目标 | 结果 | 原因 |
+|---|---|---|
+| 52pojie 全站 RSS | 200 / 20 条 | 内容为破解教程与「求资源」混排，福利纯度不足，保持 `enabled=false` |
+| 52pojie 福利经验区 `fid=66` RSS | `Specified forum not found` | 该版块未开 RSS；版块页只解析出 3 条锚点，结构不适合列表采集 |
+| 卡饭 `bbs.kafan.cn` | 全站 RSS 200 / 20 条 | 版块全是杀软/样本/硬件，无福利版块（`fid=39` 不存在） |
+| 恩山 `right.com.cn` | 200 但返回 JS 挑战页 | 反爬，需浏览器 |
+| 远景 `bbs.pcbeta.com` | 200 但返回「请启用 JavaScript」 | 同上 |
+| 百度贴吧 `tieba.baidu.com/f?kw=免费` | 403 | 反爬 |
+| 豆瓣小组 | 讨论页 200 但无 RSS | 豆瓣已停小组 feed（`/feed/group/<id>/discussion` 404），HTML 结构脆弱 |
+| 什么值得买「白菜党」 | 404 | 频道已改版；`post.smzdm.com/feed/` 是原创长文（生活/评测），非好价 |
+| 酷安 / 券妈妈 / TapTap | 200 但为 JS 反爬外壳（`renderData`） | 需签名或渲染 |
+| 京东试用 / 淘宝试用 | 200 空壳 / 500 | 需登录 |
+| 游研社 / 掘金 / 快科技 | RSS 可用（12 / 20 / 100 条） | 游戏资讯与技术文章，不是福利，未纳入 |
+| S1 论坛 `bbs.saraba1st.com` | 连接超时 | 本机不可达 |
+| 虎扑 / 3DM / 17173 / VGtime | 200 首页 | 无福利频道，HTML 列表页噪声大 |
+### 9.4 NGA 版块地图（免登录枚举，2026-11-15）
+
+NGA 的列表页对访客 403，但**版面权限页是免登录的**：
+`https://bbs.nga.cn/nuke.php?__lib=view_privilege&__act=view&id=<fid>` → 200，返回该版块的层级链与访问条件。
+扫 fid=400..900（每次 120ms）得到 463 个存在的版块，其中 106 个因为层级链里出现了父版块名而拿到了名字。
+
+关键发现：**570 不是孤立的购物版，它挂在「杂谈 > 消费电子 IT新闻」下**：
+
+```
+杂谈 (668)
+└─ 消费电子 IT新闻 (436)
+   ├─ 498  二手交易
+   ├─ 570  优惠信息购物指南        ← 已接入 nga-deals
+   ├─ 576  （名称待确认）
+   └─ 613  分享活动买家互助（拼车/拼单） ← 已接入 nga-carpool
+```
+
+`668 杂谈` 的其它子版：`-7` 网事杂谈、`-343809` 汽车俱乐部、`-1459709` 职场人生、`-576177` 影音讨论区、`-447601` 二次元国家地理、`-84` 模玩之魂、`-81981` 生命之杯；另有 `524` 漩涡书院（网络文学）。
+
+版块名确认来源：搜索引擎收录的 `thread.php?fid=<fid>` 页面标题（570=优惠信息购物指南、498=二手交易、613=分享活动买家互助、524=漩涡书院、428=手机网页游戏综合讨论、650=原神、307=论坛公告、572=二次元国家合集、863=手机游戏快讯）。
+
+访问条件差异（同一接口返回）：
+
+| 版块 | 访问条件 |
+|---|---|
+| 498 / 570 / 613 | 主题最后回复时间在 2019-04-01 之后 **并且** 是访客或注册用户 |
+| -7 网事杂谈 | 主题发布时间在 144 小时内 **并且** 是**注册用户** |
+
+「访客」指的是 NGA 游客 cookie 机制，而 `thread.php` 连游客 cookie 都不再下发，所以实际上仍然需要 `ngaPassportUid` + `ngaPassportCid`。
+
+落地：新增两个源，与 `nga-deals` 共用 `nga` 采集器（`categoryHint` 由 config 透传到每条条目）：
+
+- `nga-carpool` → **fid=613 分享活动买家互助**，`categoryHint: carpool`（拼车 / 合租 / 拼单），间隔 900s
+- `nga-trade` → **fid=498 二手交易**，`categoryHint: trade`（二手设备 / 出鸡），间隔 1200s
+
+**暂不接入**：`-7` 网事杂谈 —— 水区流量大但福利帖占比极低，且需要注册用户 + 只看 144 小时内新帖，噪声与配额成本不成正比；若要接，先加标题关键词白名单（免费/领取/白嫖/兑换码/0 元）。各游戏专区下的「兑换码」帖子同理，噪声高于收益。
+
+### 9.5 B 站（wbi 签名搜索，免登录，2026-11-15）
+
+结论：**B 站可以零 cookie 采集**，靠公开的 wbi 签名算法。
+
+| 接口 | 实测 | 说明 |
+|---|---|---|
+| `x/web-interface/nav` | 200 code=0 | 返回 `wbi_img.img_url` / `sub_url`，未登录也给 |
+| `x/web-interface/wbi/search/type` | 未签名 -403/-352；签名后 **code=0，20 条/页** | 主通道，`search_type=video` 或 `article` |
+| `x/web-interface/search/all/v2` | 200 code=0 | 免签名，作 wbi 失效时的降级通道 |
+| `x/web-interface/ranking/v2?rid=` | 200，每区约 100 条 | 可用但与福利无关（全站热榜） |
+| `x/web-interface/popular` | 200，20 条 | 同上，未采用 |
+| `x/polymer/web-dynamic/v1/feed/space` | 无 cookie 返回空 | UP 主动态需登录态，暂不接 |
+
+wbi 签名实现（`src/server/collectors/bili.ts`）：取 `img_url` / `sub_url` 的文件名拼成一个 64 字符串，按固定 MIXIN 表重排后取前 32 位当密钥；请求参数按字母序拼接 + `wts` 时间戳，`w_rid = md5(query + key)`。keys 进程内缓存 1 小时。
+
+实测一次采集（关键词：免费领取 / 白嫖 / 喜加一 / 限时免费，每词 15 条）：
+
+```
+免费领取 ok:20 kept:15
+白嫖     ok:20 kept:15
+喜加一   ok:20 kept:15
+限时免费 ok:20 kept:1      ← 其余是影视剧集，被标题白名单挡掉
+相似标题合并 46 → 45
+fetched=45 inserted=44 duration=6511ms
+```
+
+入库后 `kind` 分布：`freebie=40 / deal=4`；`category`：game 23、media 11、goods 4、other 4、ai 1、edu 1。当日正好是 BLG 夺冠送大会员，media 类全是这条真实福利。
+
+### 过滤与去重策略（踩过的坑）
+
+1. **标题词只看标题，不看简介**：一开始把 `title + summary` 一起匹配"免费"，结果「【4K超清】橘里夫人 全12集」因为简介里有"免费"被放进来。改为标题命中白名单、简介只参与排除词。
+2. **相似标题合并要区分「跨 UP 复述」与「同 UP 系列」**：实测 BLG 送大会员被 10 个 UP 复述，两两 bigram Jaccard 0.71-0.77；而同一 UP 的每周喜加一汇总（`【免费白嫖1511】` vs `【免费白嫖1474】`）相似度只有 0.39-0.47。所以阈值取 0.7 **并且要求作者不同**才合并 —— 单看相似度会把周报系列误杀。
+3. **已知噪声**：私服/引流广告（如「DNF70 龙服预热…送黑钻」）能通过标题白名单并拿到 78 分，靠全局屏蔽词（`block_rules`）处理，不在采集端硬编码。
+
+> 未接入：B 站 UP 主动态（需 cookie）、`t.bilibili.com` 动态页（SPA 渲染）。若后续要盯固定 UP 主，复用 Cookie 托管加一个 `bilibili` 站点即可。
+### 9.6 微博（没有 RSS 可用，但 PC ajax 能直采；实测噪声过高，默认关闭）
+
+**先回答「微博有没有现成 RSS」：有路由，但没有能用的实例。**
+
+| 通道 | 实测（2026-11-15） |
+|---|---|
+| `rsshub.app/weibo/keyword/…` | 连接失败 |
+| `rsshub.rssforever.com/weibo/keyword/…` | 503（返回 RSSHub 欢迎页） |
+| `rss.shab.fun/weibo/keyword/…` | 连接失败 |
+| 微博官方 | 不提供 RSS |
+
+RSSHub 确实有 `/weibo/user/:uid`、`/weibo/keyword/:keyword` 路由，但公共实例全挂；自建要 Node + Chromium（Puppeteer 渲染微博）常驻 200MB+ 内存，与「单机轻量、不加常驻容器」的取舍冲突。所以走直采。
+
+**直采通道（需要 weibo.com 登录 Cookie，`SUB` 是主凭据）**
+
+| 接口 | 实测 |
+|---|---|
+| `weibo.com/ajax/statuses/search?q=<kw>&page=1` | 200 / 340KB / `statuses[]` 48-50 条 / `total_number` 命中总数（"免费领取"=2,270,277）；`sort=hot|time` **参数无效**，恒为时间序 |
+| `weibo.com/ajax/statuses/mymblog?uid=<uid>&page=1&feature=0` | 200 / `data.list[]` 20 条（盯指定博主） |
+| `s.weibo.com/weibo?q=<kw>` | 200 / 293KB HTML（登录态可用，解析成本高，未用） |
+| `m.weibo.cn/api/container/getIndex` | 用 PC cookie 返回 `ok:-100` 跳登录 —— **PC 的 SUB 在 m.weibo.cn 域不认**，移动端接口必须用移动端登录态 |
+
+字段映射：`mid` 作 externalId、`user.idstr` + `mblogid` 拼出 `weibo.com/<uid>/<mblogid>`、正文 `text_raw`、时间 `created_at`（`Sun Nov 15 20:27:21 +0800 2026` 能被 `new Date()` 解析）、图片 `pic_ids[0]` → `wx1.sinaimg.cn/large/<id>.jpg`（实测 200 image/jpeg 916KB）。
+
+**实测质量问题（这是它与 B 站的关键差别）**
+
+三个关键词（免费领取 / 白嫖攻略 / 羊毛）一轮拿到 60 条，按正文指纹合并营销号刷屏后入库 25 条，但列表里真正能用的只有 2-3 条：
+
+- 擦边图包拿 81 分：`No.11131 花样抹胸裙 [137P-2.06GB] ￥10 获取原图`（正文里带「免费」字样就过了白名单）
+- 手游私服广告：`向僵尸开炮0.1最新玩法 进有50000每天20000`
+- 同文案刷屏：`11月13日星期五 最新白嫖奶茶教程` 被 4 个号转发（日期不同，指纹合并只能吃掉一部分）
+- 新闻误入：`#零元面馆周边商户快交不起房租了#`
+
+微博搜索没有热度排序、也没有"只看带链接的"这类过滤，关键词越泛噪声越大。**因此 `weibo-freebies` 默认 `enabled: false`。**
+
+**如果要启用，用盯人模式而不是关键词**：`config: { uids: ["<羊毛博主 uid>", ...] }`，走 `mymblog` 拿博主的原始时间线，质量远高于搜索（博主本身就是筛选器）。实测两个猜测的 uid（1669937675 / 7512667074）返回 60B 空数据，说明 uid 得给真实的，不能猜。
+
+采集器已实现的能力：搜索 + 盯人两种模式可同时配、白名单/排除词（含擦边与私服）、同文案指纹合并（保留互动量最高的一条）、正文首句切标题（按 `。！？，；` 切）。
+### 9.7 踩坑：改 `SEEDS` 不影响已存在的源
+
+`ensureSources()` 的 SQL 是 `ON CONFLICT(id) DO UPDATE SET name = excluded.name, kind = excluded.kind` —— **只同步 name / kind，不动 config / enabled / interval_sec**（故意为之：运维台手改过的配置不能被内置值覆盖）。
+
+所以本地调 `SEEDS` 后如果发现行为没变，先查库：
+
+```sql
+SELECT id, enabled, config FROM sources WHERE id = '…';
+```
+
+实测就踩过：把 `nga-carpool` 的 `categoryHint` 从 `carpool` 改成不设置，重跑后 28 条仍然被判成 `carpool`，原因是库里的旧 config 还在。手动 `UPDATE sources SET config = …` 后才生效。
+
+顺带记录 613 版块的分类结论：内容是团购/拼单（`辉山纯牛奶20盒30元`、`三人团 芬达5瓶7.9元`），**既不是 carpool（拼车/合租）也不是 other**：
+
+| categoryHint | 结果 |
+|---|---|
+| `carpool` | 35 条全被强制成「拼车/合租」—— 团购≠拼车，错 |
+| 不设置 | 规则判成 `other` 28 条 + `goods` 7 条 —— 大量丢分类 |
+| `goods` | 35 条全 `goods`（生活羊毛/实物）—— 采用 |
+
+另一个已知偏差（未在本次范围内修）：这 35 条 `kind` 判成 `freebie=34 / deal=1`，但它们是"30 元 20 盒牛奶"这类好价，理想应为 `deal`。属于既有 kind 规则对「N 元」的判定精度问题。

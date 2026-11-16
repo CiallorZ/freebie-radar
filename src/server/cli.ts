@@ -1,5 +1,5 @@
 import { all, get, migrate, run } from "./db.ts";
-import { enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
+import { demoteOfflineCategory, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
 import { calibrateScoreByObtain, resolveDbMergeKey } from "./enrich/alias.ts";
 import { backfillAi } from "./ai-admin.ts";
 import { runAll, runSource, ensureSources, getSourceHints } from "./collectors/index.ts";
@@ -108,6 +108,14 @@ async function main() {
           price: e.price,
           freebieOnlySource: FREEBIE_ONLY_SOURCES.has(row.source_id),
         });
+        // 资讯/水帖不许落进实地福利（AI 或旧规则标错的在这里降级）
+        finalCategory = demoteOfflineCategory(
+          finalCategory,
+          finalKind,
+          row.title,
+          row.summary ?? "",
+          e.category,
+        ) as typeof finalCategory;
         const finalScore = calibrateScoreByObtain(e.baseScore, finalObtain, aiKeepBool, finalQuality, finalKind, {
           title: e.title,
 summary: e.summary ?? "",

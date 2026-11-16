@@ -1,6 +1,6 @@
 import { all, get, run } from "./db.ts";
 import { calibrateScoreByObtain } from "./enrich/alias.ts";
-import { enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
+import { demoteOfflineCategory, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
 import { isAuthoritativeNewsSource } from "./enrich/kind.ts";
 import { guessObtain } from "./enrich/obtain.ts";
 import { isBlocked, loadActiveBlockRules } from "./enrich/blocklist.ts";
@@ -273,6 +273,14 @@ if (!v.keep) rejected += 1;
           price: baseEnriched?.price ?? null,
           freebieOnlySource: FREEBIE_ONLY_SOURCES.has(row.source_id),
         });
+        // 资讯/水帖不许落进实地福利
+        const finalCategory = demoteOfflineCategory(
+          category,
+          kind,
+          row.title,
+          row.summary ?? "",
+          baseEnriched?.category ?? null,
+        );
         const effectiveKeep = kind === "noise" ? false : v.keep;
         const keep = effectiveKeep ? 1 : 0;
         const ai = JSON.stringify({ ...v, keep: effectiveKeep, kind });
@@ -284,7 +292,7 @@ if (!v.keep) rejected += 1;
           codes: baseEnriched?.codes ?? [],
           price: baseEnriched?.price ?? null,
         });
-        updateAi(row.id, ai, keep, score, category, obtain, kind, quality);
+        updateAi(row.id, ai, keep, score, finalCategory, obtain, kind, quality);
       }
     }
     finishAiJob(jobId, {
@@ -336,10 +344,11 @@ export function reclassifyStoredItems(scope: "other" | "all" = "other"): {
     published_at: string | null;
     expires_at: string | null;
     ai_quality: number | null;
+    ai: string | null;
     score: number;
     base_score: number | null;
   }>(
-    `SELECT id, source_id, external_id, url, title, summary, category, kind, obtain, ai_keep, ai_quality, score, base_score, published_at, expires_at
+    `SELECT id, source_id, external_id, url, title, summary, category, kind, obtain, ai_keep, ai_quality, ai, score, base_score, published_at, expires_at
        FROM items WHERE ${cond} ORDER BY id DESC LIMIT 6000`,
   );
 
@@ -360,10 +369,21 @@ export function reclassifyStoredItems(scope: "other" | "all" = "other"): {
       hints,
     );
     if (!e) continue;
-    // 已人工/AI 审核过的非 other 条目不随意覆盖其 AI 分类，只修复 other / 误判成 news 的 VPS 帖子 / 非权威源的 news
+    // AI 审核给出的分类优先：规则以前只用它算 kind，落库却存了关键词结果，导致 AI 判对的分类被丢掉
+    let aiCategory: string | null = null;
+    if (r.ai) {
+      try {
+        const parsed = JSON.parse(r.ai) as { category?: unknown };
+        if (isCategory(parsed.category)) aiCategory = parsed.category;
+      } catch {
+        aiCategory = null;
+      }
+    }
+    // 已人工/AI 审核过的非 other 条目不随意覆盖其分类，只修复 other / 误判成 news 的 VPS 帖子 / 非权威源的 news
     const catWasLegacyNews = (r.category === "news" || r.category === "headline") && e.category === "vps";
-    const nextCat =
-      r.ai_keep !== null && r.category && r.category !== "other" && !catWasLegacyNews ? r.category : e.category;
+    let nextCat =
+      aiCategory ??
+      (r.ai_keep !== null && r.category && r.category !== "other" && !catWasLegacyNews ? r.category : e.category);
     let nextKind = r.ai_keep === null ? e.kind : (r.kind ?? e.kind);
     if (hints.kindHint && r.ai_keep !== 0 && nextKind !== hints.kindHint) {
       nextKind = e.kind;
@@ -381,6 +401,8 @@ export function reclassifyStoredItems(scope: "other" | "all" = "other"): {
     }
     const fallbackObtain = guessObtain(r.title, r.summary ?? "");
     const nextObtain = r.ai_keep === null ? fallbackObtain : (r.obtain ?? fallbackObtain);
+    // 资讯/水帖不许落进实地福利
+    nextCat = demoteOfflineCategory(nextCat, nextKind, r.title, r.summary ?? "", e.category) as typeof nextCat;
 
 // 顺手用新的多维加权口径重算分数（规则内容分存进 base_score，AI 质量分参与合成）
     const keepBool = r.ai_keep === null ? null : r.ai_keep === 1;

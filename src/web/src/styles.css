@@ -45,7 +45,7 @@
 
 @layer base {
   html {
-    color-scheme: light;
+    color-scheme: only light;
   }
   body {
     margin: 0;

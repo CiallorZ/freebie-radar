@@ -1,6 +1,6 @@
 import { aiEnabled, config, pushEnabled } from "../config.ts";
 import { all, get, run, tx } from "../db.ts";
-import { enrichItem, FREEBIE_ONLY_SOURCES, resolveKind, type ContentKind } from "../enrich/index.ts";
+import { demoteOfflineCategory, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind, type ContentKind } from "../enrich/index.ts";
 import { calibrateScoreByObtain, resolveDbMergeKey } from "../enrich/alias.ts";
 import { getAiSettings, matchesEntryNoise, shouldPassSourceToAi, shouldReview, type AiVerdict } from "../enrich/ai.ts";
 import { enqueueForAi, reviewFreshNow, setPostReviewHandler } from "../enrich/ai-queue.ts";
@@ -9,8 +9,16 @@ import { isBlocked, loadActiveBlockRules } from "../enrich/blocklist.ts";
 import { getRetention } from "../retention.ts";
 import { hasCookieConfiguredForSource } from "../cookie-store.ts";
 import { getPushSettings, pushInstant, pushReviewedByIds } from "../instant.ts";
+import { dispatchUserPush, dispatchUserPushByIds, hasEnabledUserPush } from "../user-push.ts";
 
-setPostReviewHandler(pushReviewedByIds);
+// AI 后台补审通过后：先走全局推送，再按每个用户的个人规则派发一次
+setPostReviewHandler(async (sourceId, ids) => {
+  const n = await pushReviewedByIds(sourceId, ids);
+  await dispatchUserPushByIds(sourceId, ids).catch((err) => {
+    console.error("[user-push] 补审派发失败:", err instanceof Error ? err.message : err);
+  });
+  return n;
+});
 import { createHttp, type HttpClient } from "../http.ts";
 import { mockCollector } from "./mock.ts";
 import { linuxdoCollector } from "./linuxdo.ts";
@@ -27,11 +35,15 @@ import { openrouterCollector } from "./openrouter.ts";
 import { bskyCollector } from "./bsky.ts";
 import { cctvCollector } from "./cctv.ts";
 import { cookieIngestCollector } from "./cookie.ts";
+import { ngaCollector } from "./nga.ts";
+import { biliCollector } from "./bili.ts";
+import { weiboCollector } from "./weibo.ts";
 import type { Collector, RawItem, SourceSeed } from "./types.ts";
 
 export const COLLECTORS: Collector[] = [
   mockCollector, linuxdoCollector, v2exCollector, githubCollector, rssCollector, telegramCollector,
   gamerpowerCollector, epicCollector, gogCollector, steamCollector, cheapsharkCollector, bskyCollector, openrouterCollector, cctvCollector, cookieIngestCollector,
+  ngaCollector, biliCollector, weiboCollector,
 ];
 const BY_KIND = new Map(COLLECTORS.map((c) => [c.kind, c]));
 
@@ -72,6 +84,12 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-vpsgo", name: "VPSGO · 主机促销", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsgo", url: "https://www.vpsgo.com/feed", limit: 20, categoryHint: "vps" }] } },
   { id: "rss-vpsxb", name: "VPS小站 · 特价主机", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsxb", url: "https://www.vpsxb.net/feed/", limit: 20, categoryHint: "vps" }] } },
   { id: "rss-lowendbox", name: "LowEndBox · VPS 优惠", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "lowendbox", url: "https://lowendbox.com/feed/", limit: 20 }] } },
+  // 中文主机圈促销博客（2026-11-15 实测 RSS 可用，国内直连）
+  { id: "rss-vpsjxw", name: "VPS精选网 · 中文主机促销", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsjxw", url: "https://www.vpsjxw.com/feed", limit: 20, categoryHint: "vps" }] } },
+  { id: "rss-laozuo", name: "老左博客 · VPS 优惠", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "laozuo", url: "https://www.laozuo.org/feed", limit: 15, categoryHint: "vps" }] } },
+  { id: "rss-veidc", name: "VEIDC · 主机商促销", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "veidc", url: "https://www.veidc.com/feed", limit: 20, categoryHint: "vps" }] } },
+  { id: "rss-vpser", name: "VPS 侦探 · 主机优惠", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpser", url: "https://www.vpser.net/feed", limit: 15, categoryHint: "vps" }] } },
+  { id: "rss-banwagong", name: "搬瓦工中文网 · 套餐与优惠", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "banwagong", url: "https://www.banwagong.net/feed", limit: 15, categoryHint: "vps" }] } },
 
   // === 游戏限免 / Key / 礼包 ===
   { id: "epic-free", name: "Epic Games · 本周喜加一", kind: "epic", enabled: true, intervalSec: 3600, config: { includeUpcoming: false } },
@@ -125,7 +143,17 @@ export const SEEDS: SourceSeed[] = [
   { id: "zhihu-search", name: "知乎 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费领取" } },
   { id: "xhs-search", name: "小红书 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费领取" } },
   { id: "xiaoheihe-search", name: "小黑盒 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费" } },
-
+  // NGA 需登录态 Cookie（ngaPassportUid / ngaPassportCid）：fid=570 优惠信息购物指南，国内羊毛主阵地；未配 Cookie 前默认关闭（配好后在管理端启用，与 weibo-freebies 同理）
+  { id: "nga-deals", name: "NGA · 优惠信息购物指南", kind: "nga", enabled: false, intervalSec: 600, config: { fid: 570, forumName: "优惠信息购物指南" } },
+  // 570 / 613 / 498 同属「杂谈 > 消费电子 IT新闻 (436)」下的子版；613 拼车拼单、498 二手交易
+  { id: "nga-carpool", name: "NGA · 分享活动买家互助（拼车拼单）", kind: "nga", enabled: false, intervalSec: 900, config: { fid: 613, forumName: "分享活动买家互助", categoryHint: "goods" } },
+  { id: "nga-trade", name: "NGA · 二手交易", kind: "nga", enabled: false, intervalSec: 1200, config: { fid: 498, forumName: "二手交易", categoryHint: "trade" } },
+// B站关键词搜索：wbi 签名免登录可用，抓「喜加一 / 白嫖 / 限免」类视频；内容为视频，靠 AI 一审判 kind
+  { id: "bili-freebies", name: "B站 · 喜加一与白嫖搜索", kind: "bili", enabled: true, intervalSec: 1800, config: { keywords: ["免费领取", "白嫖", "喜加一", "限时免费"], limitPerKeyword: 15 } },
+// 微博：PC ajax 搜索 + 盯人，需 weibo.com 登录 Cookie（SUB）；无官方 RSS，RSSHub 公共实例已全挂
+  // 实测关键词搜索结果噪声极高（擦边图包、手游私服、"白嫖奶茶教程"刷屏），默认关闭；
+  // 要启用建议改成盯人模式：config 里给 uids: ["<羊毛博主 uid>", ...]，质量远高于关键词搜索
+  { id: "weibo-freebies", name: "微博 · 福利搜索（噪声高，默认关）", kind: "weibo", enabled: false, intervalSec: 1800, config: { keywords: ["免费领取", "白嫖攻略", "羊毛"], limitPerKeyword: 20 } },
   // === 按需选开的低纯度 / 需代理 / 扩展源（默认关闭以保持低噪与轻量化）===
   { id: "tg-cn-deals", name: "TG · 中文科技/VPS/羊毛", kind: "telegram", enabled: true, intervalSec: 300, config: { channels: ["zaihuapd", "zaihuanews", "v2ex_channel", "appinnfeed"] } },
   { id: "bsky-gamedeals", name: "Bluesky · 游戏限免大号", kind: "bsky", enabled: true, intervalSec: 1800, config: { actors: ["freegamefindings.bsky.social", "freegamealert.bsky.social", "wario64.bsky.social", "cheapassgamer.com", "dekudeals.com", "steamdb.bsky.social"], limitPerActor: 10 } },
@@ -193,6 +221,8 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-leiphone", name: "雷锋网 · AI 与科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "leiphone", url: "https://www.leiphone.com/feed", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-tmtpost", name: "钛媒体 · 商业科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "tmtpost", url: "https://www.tmtpost.com/rss.xml", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-ifanr", name: "爱范儿 · 数码前沿", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "ifanr", url: "https://www.ifanr.com/feed", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-cnbeta", name: "cnBeta · 简明IT新闻", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "cnbeta", url: "https://www.cnbeta.com.tw/backend.php", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-36kr", name: "36氪 · 创业商业科技", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "36kr", url: "https://www.36kr.com/feed", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-gnews-biz", name: "Google News · 商业财经头条", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-biz", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 25, categoryHint: "finance" }] } },
   { id: "rss-gnews-cls", name: "财联社要闻（Google News）", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "stock", feeds: [{ id: "gnews-cls", url: "https://news.google.com/rss/search?q=site:cls.cn&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "stock" }] } },
   { id: "rss-gnews-yicai", name: "第一财经（Google News）", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-yicai", url: "https://news.google.com/rss/search?q=site:yicai.com&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "finance" }] } },
@@ -205,8 +235,7 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-ithome", name: "IT之家", kind: "rss", enabled: true, config: { feeds: [{ id: "ithome", url: "https://www.ithome.com/rss/", limit: 25 }] } },
   { id: "rss-smzdm", name: "什么值得买", kind: "rss", enabled: true, config: { feeds: [{ id: "smzdm", url: "https://www.smzdm.com/rss/", limit: 20 }] } },
   { id: "rss-fuliba", name: "福利吧", kind: "rss", enabled: true, config: { feeds: [{ id: "fuliba", url: "https://fuliba.net/feed", limit: 30 }] } },
-  { id: "rss-52pojie", name: "吾爱破解", kind: "rss", enabled: true, config: { feeds: [{ id: "52pojie", url: "https://www.52pojie.cn/forum.php?mod=rss", limit: 20 }] } },
-  { id: "rss-9to5toys", name: "9to5Toys 优惠", kind: "rss", enabled: false, config: { feeds: [{ id: "9to5toys", url: "https://9to5toys.com/feed/", limit: 25 }] } },
+  { id: "rss-52pojie", name: "吾爱破解", kind: "rss", enabled: true, config: { feeds: [{ id: "52pojie", url: "https://www.52pojie.cn/forum.php?mod=rss", limit: 20 }] } },  { id: "rss-9to5toys", name: "9to5Toys 优惠", kind: "rss", enabled: false, config: { feeds: [{ id: "9to5toys", url: "https://9to5toys.com/feed/", limit: 25 }] } },
   { id: "rss-producthunt", name: "Product Hunt", kind: "rss", enabled: true, config: { feeds: [{ id: "producthunt", url: "https://www.producthunt.com/feed", limit: 25 }] } },
   { id: "rss-hnrss", name: "Hacker News（100+ 分）", kind: "rss", enabled: true, config: { feeds: [{ id: "hnrss", url: "https://hnrss.org/frontpage?points=100", limit: 25 }] } },
   { id: "rss-ruanyifeng", name: "阮一峰 · 科技爱好者周刊", kind: "rss", enabled: true, intervalSec: 21600, config: { feeds: [{ id: "ruanyifeng", url: "https://www.ruanyifeng.com/blog/atom.xml", limit: 10 }] } },
@@ -238,6 +267,9 @@ async function dispatchFresh(
 
   if (!reviewOn || !aiSettings) {
     await pushInstant(sourceId, fresh);
+    await dispatchUserPush(sourceId, fresh).catch((err) => {
+      console.error("[user-push] 派发失败:", err instanceof Error ? err.message : err);
+    });
     return;
   }
 
@@ -276,6 +308,9 @@ async function dispatchFresh(
       log(`[${sourceId}] 白嫖专源免送 AI，${nonNoise.length} 条直接放行`);
     }
     await pushInstant(sourceId, nonNoise);
+    await dispatchUserPush(sourceId, nonNoise).catch((err) => {
+      console.error("[user-push] 派发失败:", err instanceof Error ? err.message : err);
+    });
     return;
   }
 
@@ -301,6 +336,9 @@ async function dispatchFresh(
     }
     log(`[${sourceId}] 推送前 AI 审核 ${syncBatch.length} 条（拦截 ${syncBatch.filter((f) => f.aiKeep === false).length} 条）`);
     await pushInstant(sourceId, syncBatch);
+    await dispatchUserPush(sourceId, syncBatch).catch((err) => {
+      console.error("[user-push] 派发失败:", err instanceof Error ? err.message : err);
+    });
     if (restBatch.length) {
       enqueueForAi(
         restBatch.map((f) => ({
@@ -319,6 +357,9 @@ async function dispatchFresh(
   }
 
   await pushInstant(sourceId, fresh);
+  await dispatchUserPush(sourceId, fresh).catch((err) => {
+    console.error("[user-push] 派发失败:", err instanceof Error ? err.message : err);
+  });
   enqueueForAi(
     nonNoise.map((f) => ({
       itemId: f.id,
@@ -340,7 +381,8 @@ export function ingestItems(sourceId: string, items: RawItem[]): { inserted: num
   const runId = Number(runRow.lastInsertRowid);
   try {
     const saved = persist(sourceId, items, null);
-    if (saved.fresh.length && (shouldReview() || pushEnabled)) {
+    // 个人 Bot 推送与全局 Bot 解耦：全局没配 TELEGRAM_BOT_TOKEN 时也要跑推送链路
+    if (saved.fresh.length && (shouldReview() || pushEnabled || hasEnabledUserPush())) {
       void dispatchFresh(sourceId, saved.fresh).catch(() => {});
     }
     const durationMs = Date.now() - t0;
@@ -551,6 +593,15 @@ function persist(
             kindHint: srcHints.kindHint,
           })
         : e.kind;
+      // AI 给出的分类优先于关键词规则（以前这里只用规则结果，AI 判对的分类被丢掉）；
+      // 再统一收口：资讯/水帖不许落进实地福利
+      const effectiveCategory = demoteOfflineCategory(
+        verdict?.category && isCategory(verdict.category) ? verdict.category : e.category,
+        effectiveKind,
+        e.title,
+        e.summary ?? "",
+        e.category,
+      );
       const effectiveQuality =
         typeof verdict?.quality === "number" && Number.isFinite(verdict.quality)
           ? Math.min(5, Math.max(1, Math.round(verdict.quality)))
@@ -639,7 +690,7 @@ const scoreCtx = {
           titleKey,
           e.summary ?? "",
           e.author ?? null,
-          e.category,
+          effectiveCategory,
           JSON.stringify(e.tags),
           e.baseScore,
           nextScore,
@@ -682,7 +733,7 @@ const scoreCtx = {
           titleKey,
           e.summary ?? "",
           e.author ?? null,
-          e.category,
+          effectiveCategory,
           JSON.stringify(e.tags),
           e.baseScore,
           score,
@@ -716,7 +767,7 @@ const scoreCtx = {
           aiKeep: verdict ? verdict.keep : null,
           aiReason: verdict?.reason ?? null,
           kind: effectiveKind,
-          category: verdict?.category || e.category,
+          category: effectiveCategory,
           obtain: effectiveObtain,
           summary: e.summary ?? null,
           content: e.content ?? null,

@@ -1,7 +1,7 @@
 import { config } from "./config.ts";
 import { get, run } from "./db.ts";
 
-export type CookieSiteKey = "zhihu" | "xhs" | "xiaoheihe";
+export type CookieSiteKey = "zhihu" | "xhs" | "xiaoheihe" | "nga" | "weibo";
 
 export type ParsedCookie = {
   name: string;
@@ -43,24 +43,32 @@ const SITE_DOMAINS: Record<CookieSiteKey, string> = {
   zhihu: ".zhihu.com",
   xhs: ".xiaohongshu.com",
   xiaoheihe: ".xiaoheihe.cn",
+  nga: ".nga.cn",
+  weibo: ".weibo.com",
 };
 
 const SITE_AUTH_HINTS: Record<CookieSiteKey, RegExp> = {
   zhihu: /^(z_c0|d_c0|sessionid)$/i,
   xhs: /^(web_session|a1|gid)$/i,
   xiaoheihe: /^(user_token|heybox_id|x_app_id|x_os_type)$/i,
+  nga: /^(ngaPassportUid|ngaPassportCid)$/i,
+  weibo: /^(SUB|SUBP|SCF|PC_TOKEN)$/i,
 };
 
 export const SITE_BY_SOURCE: Record<string, CookieSiteKey> = {
   "zhihu-search": "zhihu",
   "xhs-search": "xhs",
   "xiaoheihe-search": "xiaoheihe",
+  "nga-deals": "nga",
+  "weibo-freebies": "weibo",
 };
 
 export const BASE_SITE_KEYWORDS: Record<CookieSiteKey, string[]> = {
   zhihu: ["免费领取", "免费额度", "白嫖", "免费积分", "白嫖算力", "开发者福利"],
   xhs: ["免费领取", "白嫖", "免费会员", "白嫖额度", "免费积分", "免费算力", "开发者福利"],
   xiaoheihe: ["免费"],
+  nga: ["免费领取"],
+  weibo: ["免费领取", "白嫖", "羊毛"],
 };
 
 export function siteKeyOfSource(sourceId: string): CookieSiteKey | null {
@@ -163,7 +171,7 @@ export function updateCookieSettings(patch: {
 
   if (patch.cookies) {
     const now = new Date().toISOString();
-    for (const site of ["zhihu", "xhs", "xiaoheihe"] as const) {
+    for (const site of ["zhihu", "xhs", "xiaoheihe", "nga", "weibo"] as const) {
       if (!(site in patch.cookies)) continue;
       const raw = String(patch.cookies[site] ?? "").trim();
       if (!raw) {
@@ -184,7 +192,7 @@ export function updateCookieSettings(patch: {
 
 export function toPublicCookieStatus(settings: StoredCookieSettings = getCookieSettings()): PublicCookieStatus {
   const sites = {} as Record<CookieSiteKey, PublicSiteCookieStatus>;
-  for (const site of ["zhihu", "xhs", "xiaoheihe"] as const) {
+  for (const site of ["zhihu", "xhs", "xiaoheihe", "nga", "weibo"] as const) {
     const entry = settings.sites[site];
     const cookies = entry?.cookies ?? [];
     const keyNames = cookies.map((c) => c.name);
@@ -208,5 +216,9 @@ export function hasCookieConfiguredForSource(sourceId: string): boolean {
   const site = siteKeyOfSource(sourceId);
   if (!site) return false;
   const s = getCookieSettings();
+  // NGA 只需 HTTP + Cookie，不依赖 VPS 无头执行器
+  if (site === "nga") return (s.sites.nga?.cookies?.length ?? 0) > 0;
+  // 微博同理：PC 端 ajax 接口直连即可，不需要无头执行器
+  if (site === "weibo") return (s.sites.weibo?.cookies?.length ?? 0) > 0;
   return Boolean(s.runnerUrl && (s.sites[site]?.cookies?.length ?? 0) > 0);
 }

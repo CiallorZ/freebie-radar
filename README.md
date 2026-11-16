@@ -72,6 +72,7 @@
 - **零外部数据库**：基于 `node:24-alpine` 原生运行 TypeScript，内置 `node:sqlite`（WAL 模式 + 内存上限调优，自动增量迁移至 Schema v17），日常运行内存 < 100MB。
 - **63 个内置数据源（默认精选启用 33 个）**：覆盖 LINUX DO、NodeSeek（含福利/资讯/拼车交易板块）、V2EX、OpenRouter `:free` 模型、GitHub、Epic、Steam、GamerPower、CheapShark、ITAD、SharewareOnSale、TickCoupon、Reddit、Bluesky、Telegram 频道，并支持自定义 RSS 与本地回环/油猴脚本抓取知乎/小红书/小黑盒。
 - **公开/管理隔离**：配置 `ADMIN_TOKEN` 后，资源流与每日精选保持公开浏览，管理配置与写入接口全部自动鉴权保护。
+- **可选的公开多用户模式**：设 `SITE_MODE=public` + LINUX DO OAuth 后，公共内容仍只读共享，但「不想看 / 收藏 / 已读 / 屏蔽词 / 关注词」按登录用户隔离；未登录访客的偏好只存本机浏览器；登录用户可绑自己的 Telegram Bot 收个人推送，也能订阅公开 RSS 或个人专属 RSS。管理权限始终只认 `ADMIN_TOKEN`，OAuth 登录不会提权。详见 [docs/accounts.md](docs/accounts.md)。
 
 ---
 

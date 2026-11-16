@@ -70,9 +70,83 @@ export const config = {
   cookieRunnerUrl: str("COOKIE_RUNNER_URL", "http://172.17.0.1:18790"),
   /** 小红书国内代理出口（如 http://47.110.65.20:8888），供香港/海外 VPS 绕开国际版跳转 */
   xhsProxyUrl: str("XHS_PROXY_URL"),
-  /** 管理端密码；留空则管理接口全部开放（向后兼容） */
+  /**
+   * 站点形态：selfhost = 单人自建（全局状态，行为与旧版一致）；
+   * public = 公开站（公共内容只读共享，个人状态按登录用户隔离）；
+   * auto = 配了 LINUXDO_CLIENT_ID 就按 public，否则 selfhost。
+   */
+  siteMode: str("SITE_MODE", "auto"),
+
+  /* ---- LINUX DO Connect OAuth2 ---- */
+  linuxdoClientId: str("LINUXDO_CLIENT_ID"),
+  linuxdoClientSecret: str("LINUXDO_CLIENT_SECRET"),
+  linuxdoRedirectUri: str("LINUXDO_REDIRECT_URI"),
+  linuxdoMinTrustLevel: num("LINUXDO_MIN_TRUST_LEVEL", 0),
+  linuxdoAuthorizeUrl: str("LINUXDO_AUTHORIZE_URL", "https://connect.linux.do/oauth2/authorize"),
+  linuxdoTokenUrl: str("LINUXDO_TOKEN_URL", "https://connect.linux.do/oauth2/token"),
+  linuxdoUserUrl: str("LINUXDO_USER_URL", "https://connect.linux.do/api/user"),
+  /** OAuth 专用代理：国内网络直连 connect.linux.do 常被污染/阻断，但又不希望全站采集都走代理 */
+  linuxdoProxy: str("LINUXDO_PROXY"),
+  githubClientId: str("GITHUB_CLIENT_ID"),
+  githubClientSecret: str("GITHUB_CLIENT_SECRET"),
+  githubRedirectUri: str("GITHUB_REDIRECT_URI"),
+  /** GitHub OAuth 走的代理；留空回退 LINUXDO_PROXY → HTTP(S)_PROXY */
+  githubProxy: str("GITHUB_PROXY"),
+  githubAuthorizeUrl: str("GITHUB_AUTHORIZE_URL", "https://github.com/login/oauth/authorize"),
+  githubTokenUrl: str("GITHUB_TOKEN_URL", "https://github.com/login/oauth/access_token"),
+  githubUserUrl: str("GITHUB_USER_URL", "https://api.github.com/user"),
+
+  /** Session / 临时令牌签名密钥；留空则首次启动随机生成并写入 settings 表 */
+  sessionSecret: str("SESSION_SECRET"),
+  /** 个人 Bot Token 加密密钥；留空则复用 sessionSecret 或自动生成 */
+  tokenEncryptionKey: str("TOKEN_ENCRYPTION_KEY"),
+
+  /** 本地模拟登录开关：仅在非 production 且显式开启时生效 */
+  authDevMock: bool("AUTH_DEV_MOCK", false),
+
+  /* ---- 个人推送护栏（防止单用户把出口代理打满） ---- */
+  userPushMaxPerHour: num("USER_PUSH_MAX_PER_HOUR", 40),
+  userPushMaxPerInstant: num("USER_PUSH_MAX_PER_INSTANT", 5),
+
+  /* ---- 版本检测与一键更新 ---- */
+  selfUpdateRemote: str("SELF_UPDATE_REMOTE", "origin"),
+  selfUpdateBranch: str("SELF_UPDATE_BRANCH", "main"),
+  selfUpdateRestartCmd: str("SELF_UPDATE_RESTART_CMD"),
+  updateWebhookUrl: str("UPDATE_WEBHOOK_URL"),
+  updateWebhookToken: str("UPDATE_WEBHOOK_TOKEN"),
+  appCommit: str("APP_COMMIT"),
+  appBuildTime: str("APP_BUILD_TIME"),
+  appRepo: str("APP_REPO", "ZiChuanLan/freebie-radar"),
+  /** 管理端密码；留空则 selfhost 下管理接口开放、public 下管理区锁定（安全兜底） */
   adminToken: str("ADMIN_TOKEN"),
 } as const;
+
+/**
+ * 站点形态解析：auto = 配了 LINUX DO OAuth 就按公开站跑，否则按单人自建。
+ * 公开站的核心差异是「个人状态按登录用户隔离」，自建站保持旧的全局行为。
+ */
+export const siteMode: "selfhost" | "public" =
+  config.siteMode === "selfhost" || config.siteMode === "public"
+    ? config.siteMode
+    : config.linuxdoClientId && config.linuxdoClientSecret
+      ? "public"
+      : "selfhost";
+
+export const isPublicSite = siteMode === "public";
+
+/** OAuth 是否配置齐全（缺凭据时前端不显示登录按钮） */
+export const linuxdoConfigured = Boolean(config.linuxdoClientId && config.linuxdoClientSecret);
+/** GitHub OAuth 是否配置齐全 */
+export const githubConfigured = Boolean(config.githubClientId && config.githubClientSecret);
+
+/** 本地模拟登录：只在非生产环境且显式开启时可用 */
+export const devMockEnabled = config.authDevMock && process.env.NODE_ENV !== "production";
+
+/**
+ * 公开站没配 ADMIN_TOKEN 时管理区必须锁死，否则 OAuth 用户随手就能改全站配置。
+ * 自建站保持向后兼容（未设置 = 开放）。
+ */
+export const adminLocked = isPublicSite && !config.adminToken;
 
 export const aiEnabled = Boolean(config.aiBaseUrl && config.aiModel);
 export const pushEnabled = config.pushChannel !== "none" && Boolean(config.telegramBotToken && config.telegramChatId);
