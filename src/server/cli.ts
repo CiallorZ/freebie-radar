@@ -2,7 +2,7 @@ import { all, get, migrate, run } from "./db.ts";
 import { demoteOfflineCategory, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
 import { calibrateScoreByObtain, resolveDbMergeKey } from "./enrich/alias.ts";
 import { backfillAi } from "./ai-admin.ts";
-import { runAll, runSource, ensureSources, getSourceHints } from "./collectors/index.ts";
+import { runAll, runSource, ensureSources } from "./collectors/index.ts";
 import { lastDigests, runDaily } from "./digest.ts";
 import { getPushSettings, passesPushFilters } from "./push.ts";
 import { guessObtain } from "./enrich/obtain.ts";
