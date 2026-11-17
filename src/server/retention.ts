@@ -9,6 +9,7 @@ import { all, get, run } from "./db.ts";
  *  - AI 判定是福利的多留一段时间
  *  - 手动关闭（ignored）的尽快清掉
  *  - 推送日志、日报只留最近一段
+ *  - 采集运行记录只留最近一段，失败的多留一阵方便排障
  */
 export type RetentionSettings = {
   /** 普通条目保留天数：超过且非福利、非收藏的删掉 */
@@ -21,6 +22,10 @@ export type RetentionSettings = {
   pushLogDays: number;
   /** 每日精选保留天数 */
   digestDays: number;
+  /** 采集运行记录保留天数 */
+  runsDays: number;
+  /** 失败的采集运行记录保留天数（排障用，多留一阵） */
+  failedRunsDays: number;
   /** 是否每天自动清理 */
   auto: boolean;
 };
@@ -31,6 +36,8 @@ export const DEFAULT_RETENTION: RetentionSettings = {
   ignoredDays: 14,
   pushLogDays: 30,
   digestDays: 90,
+  runsDays: 30,
+  failedRunsDays: 90,
   auto: true,
 };
 
@@ -53,6 +60,8 @@ export function getRetention(): RetentionSettings {
       ignoredDays: numOr(raw.ignoredDays, DEFAULT_RETENTION.ignoredDays, 1, 3650),
       pushLogDays: numOr(raw.pushLogDays, DEFAULT_RETENTION.pushLogDays, 1, 3650),
       digestDays: numOr(raw.digestDays, DEFAULT_RETENTION.digestDays, 1, 3650),
+      runsDays: numOr(raw.runsDays, DEFAULT_RETENTION.runsDays, 1, 3650),
+      failedRunsDays: numOr(raw.failedRunsDays, DEFAULT_RETENTION.failedRunsDays, 1, 3650),
       auto: raw.auto !== false,
     };
   } catch {
@@ -68,6 +77,8 @@ export function saveRetention(patch: Partial<RetentionSettings>): RetentionSetti
     ignoredDays: numOr(patch.ignoredDays ?? cur.ignoredDays, cur.ignoredDays, 1, 3650),
     pushLogDays: numOr(patch.pushLogDays ?? cur.pushLogDays, cur.pushLogDays, 1, 3650),
     digestDays: numOr(patch.digestDays ?? cur.digestDays, cur.digestDays, 1, 3650),
+      runsDays: numOr(patch.runsDays ?? cur.runsDays, cur.runsDays, 1, 3650),
+      failedRunsDays: numOr(patch.failedRunsDays ?? cur.failedRunsDays, cur.failedRunsDays, 1, 3650),
     auto: typeof patch.auto === "boolean" ? patch.auto : cur.auto,
   };
   run(
@@ -123,6 +134,16 @@ export function runCleanup(s?: RetentionSettings, dryRun = false): CleanupReport
       label: "每日精选",
       sql: "DELETE FROM digests WHERE created_at < ?",
       params: [iso(cfg.digestDays)],
+    },
+    {
+      label: "采集运行记录",
+      sql: "DELETE FROM runs WHERE status != 'failed' AND started_at < ?",
+      params: [iso(cfg.runsDays)],
+    },
+    {
+      label: "失败的采集运行记录",
+      sql: "DELETE FROM runs WHERE status = 'failed' AND started_at < ?",
+      params: [iso(cfg.failedRunsDays)],
     },
   ];
 
