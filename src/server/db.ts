@@ -517,6 +517,10 @@ const MIGRATIONS: string[] = [
     UPDATE items SET category = COALESCE(NEW.category, category), kind = COALESCE(NEW.kind, kind) WHERE id = NEW.item_id;
   END;
   `,
+  /* v32：失败源指数退避（E1）：记连续失败次数，调度按 interval × 2^n 拉长，上限 24 小时 */
+  `
+  ALTER TABLE sources ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function dbPath(): string {
@@ -556,7 +560,14 @@ export function migrate(): number {
   const row = conn.prepare("PRAGMA user_version").get() as { user_version: number } | undefined;
   const current = Number(row?.user_version ?? 0);
   for (let v = current; v < MIGRATIONS.length; v += 1) {
-    conn.exec(MIGRATIONS[v]!);
+    try {
+      conn.exec(MIGRATIONS[v]!);
+    } catch (err) {
+      // 幂等重跑：ADD COLUMN 的列已存在说明该迁移已生效（如测试把 user_version
+      // 倒回去重跑旧迁移时会撞上），只放过 duplicate column，其余错误照常抛出。
+      if (!/duplicate column name/i.test(err instanceof Error ? err.message : String(err))) throw err;
+      console.log(`[migrate] v${v + 1} 跳过已存在的列（幂等重跑）`);
+    }
     conn.exec(`PRAGMA user_version = ${v + 1}`);
   }
   return Math.max(current, MIGRATIONS.length);

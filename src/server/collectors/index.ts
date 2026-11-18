@@ -402,7 +402,7 @@ export function ingestItems(sourceId: string, items: RawItem[]): { inserted: num
       "UPDATE runs SET finished_at = ?, status = 'ok', fetched = ?, inserted = ?, skipped = ?, duration_ms = ? WHERE id = ?",
       new Date().toISOString(), items.length, saved.inserted, saved.skipped, durationMs, runId,
     );
-    run("UPDATE sources SET last_run_at = ?, last_status = 'ok', last_error = NULL WHERE id = ?", startedAt, sourceId);
+    run("UPDATE sources SET last_run_at = ?, last_status = 'ok', last_error = NULL, consecutive_failures = 0 WHERE id = ?", startedAt, sourceId);
     return saved;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -410,7 +410,7 @@ export function ingestItems(sourceId: string, items: RawItem[]): { inserted: num
       "UPDATE runs SET finished_at = ?, status = 'failed', fetched = ?, error = ?, duration_ms = ? WHERE id = ?",
       new Date().toISOString(), items.length, message, Date.now() - t0, runId,
     );
-    run("UPDATE sources SET last_run_at = ?, last_status = 'failed', last_error = ? WHERE id = ?", startedAt, message.slice(0, 300), sourceId);
+    run("UPDATE sources SET last_run_at = ?, last_status = 'failed', last_error = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?", startedAt, message.slice(0, 300), sourceId);
     throw err;
   }
 }
@@ -910,11 +910,12 @@ export async function runSource(
     runId,
   );
   run(
-    "UPDATE sources SET cursor = ?, last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?",
+    "UPDATE sources SET cursor = ?, last_run_at = ?, last_status = ?, last_error = ?, consecutive_failures = CASE WHEN ? = 'failed' THEN COALESCE(consecutive_failures, 0) + 1 ELSE 0 END WHERE id = ?",
     cursor,
     startedAt,
     status,
     error,
+    status,
     sourceId,
   );
 
