@@ -7,7 +7,7 @@ process.env.SITE_MODE = "selfhost";
 process.env.ADMIN_TOKEN = "";
 
 const { migrate, run, get, closeDb } = await import("../src/server/db.ts");
-const { ensureSources, runSource } = await import("../src/server/collectors/index.ts");
+const { ensureSources, ensureSourceExists, runSource } = await import("../src/server/collectors/index.ts");
 const { effectiveIntervalSec, listDueSourceIds } = await import("../src/server/cron.ts");
 
 const isoMinutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
@@ -68,4 +68,29 @@ test("runSource：失败累计连败次数，成功一次清零", async () => {
   assert.equal(r3.status, "ok");
   assert.ok(r3.fetched > 0);
   assert.equal(failCount(), 0);
+});
+
+test("E3 ensureSourceExists：已在库的源不触发全量 upsert，缺失时才补齐", async () => {
+  // 手动改名一个种子源：若跑了全量 ensureSources，名字会被 SEEDS 覆盖回去
+  run("UPDATE sources SET name = '手动改名' WHERE id = 'rss-geekpark'");
+  ensureSourceExists("mock-backoff");
+  assert.equal(
+    get<{ name: string }>("SELECT name FROM sources WHERE id = 'rss-geekpark'")!.name,
+    "手动改名",
+  );
+  // 删掉种子源再按需补齐：应按 SEEDS 原样回来
+  run("DELETE FROM sources WHERE id = 'rss-geekpark'");
+  assert.equal(get("SELECT id FROM sources WHERE id = 'rss-geekpark'"), undefined);
+  ensureSourceExists("rss-geekpark");
+  assert.equal(
+    get<{ name: string }>("SELECT name FROM sources WHERE id = 'rss-geekpark'")!.name,
+    "极客公园",
+  );
+  // 热路径 runSource 也不应再重置手动改名
+  run("UPDATE sources SET name = '手动改名2' WHERE id = 'mock-backoff'");
+  await runSource("mock-backoff");
+  assert.equal(
+    get<{ name: string }>("SELECT name FROM sources WHERE id = 'mock-backoff'")!.name,
+    "手动改名2",
+  );
 });

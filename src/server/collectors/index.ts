@@ -184,6 +184,8 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-github-blog", name: "GitHub 博客", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "github-blog", url: "https://github.blog/feed/", limit: 15, categoryHint: "dev" }] } },
   { id: "rss-theverge", name: "The Verge · 科技前沿", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "theverge", url: "https://www.theverge.com/rss/index.xml", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-ars", name: "Ars Technica · 科技深读", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "ars", url: "https://arstechnica.com/feed/", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-gcores", name: "机核 Gcores", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "game", feeds: [{ id: "gcores", url: "https://www.gcores.com/rss", limit: 20, categoryHint: "game" }] } },
+  { id: "rss-landiannews", name: "蓝点网", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "landiannews", url: "https://www.landiannews.com/feed/", limit: 20, categoryHint: "tech" }] } },
   // === 重要新闻（央视新闻 / 中新网 / 国际权威中文媒体，直入「重要新闻」频道，严禁导购/社区源混入）===
   {
     id: "cctv-news",
@@ -386,7 +388,7 @@ async function dispatchFresh(
   log(`[${sourceId}] ${nonNoise.length}/${fresh.length} 条入 AI 异步审核队列`);
 }
 export function ingestItems(sourceId: string, items: RawItem[]): { inserted: number; skipped: number } {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
   const runRow = run("INSERT INTO runs (source_id, started_at, status) VALUES (?, ?, 'running')", sourceId, startedAt);
@@ -421,7 +423,7 @@ export function markSourceFailure(
   reason: string,
   status: "degraded" | "failed" = "degraded",
 ): { ok: true; status: string } {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const now = new Date().toISOString();
   run(
     "INSERT INTO runs (source_id, started_at, finished_at, status, fetched, inserted, skipped, duration_ms, error) VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?)",
@@ -439,6 +441,12 @@ type SourceRow = {
   config: string;
   cursor: string | null;
 };
+
+/** 轻量按需同步：源已在库里时只做一次 SELECT，不跑全量 upsert；缺失时才跑一次 ensureSources() 补齐（如部署后新增的 SEEDS）。 */
+export function ensureSourceExists(sourceId: string): void {
+  const row = get<{ id: string }>("SELECT id FROM sources WHERE id = ?", sourceId);
+  if (!row) ensureSources();
+}
 
 export function ensureSources(seeds: SourceSeed[] = SEEDS): void {
   const now = new Date().toISOString();
@@ -841,7 +849,7 @@ export async function runSource(
   sourceId: string,
   options: { http?: HttpClient; maxItems?: number; log?: (message: string) => void } = {},
 ): Promise<RunSummary> {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const log = options.log ?? ((m: string) => console.log(m));
   const source = get<SourceRow>("SELECT * FROM sources WHERE id = ?", sourceId);
   if (!source) throw new Error(`unknown source: ${sourceId}`);
@@ -932,7 +940,6 @@ export async function runSource(
 export async function runAll(
   options: { http?: HttpClient; maxItems?: number; log?: (message: string) => void } = {},
 ): Promise<RunSummary[]> {
-  ensureSources();
   // kind="ingest" 仅在服务端托管了对应站点 Cookie 且配置了执行器时才参与定时调度，否则留给本机回传
   const rows = all<{ id: string; kind: string }>("SELECT id, kind FROM sources WHERE enabled = 1 ORDER BY id")
     .filter((r) => BY_KIND.has(r.kind) && (r.kind !== "ingest" || hasCookieConfiguredForSource(r.id)))
