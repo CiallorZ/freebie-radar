@@ -53,16 +53,16 @@ const BY_KIND = new Map(COLLECTORS.map((c) => [c.kind, c]));
 
 /** 内置源清单；collector 落地后在此追加。 */
 export const SEEDS: SourceSeed[] = [
-  { id: "linuxdo-welfare", name: "LINUX DO · 福利羊毛", kind: "linuxdo", enabled: true, intervalSec: 90, config: { categoryId: 36, rssSlug: "welfare", categoryName: "福利羊毛" } },
-  { id: "linuxdo-resource", name: "LINUX DO · 资源荟萃", kind: "linuxdo", enabled: false, intervalSec: 180, config: { categoryId: 14, rssSlug: "resource", categoryName: "资源荟萃", fixedCategory: "pan" } },
+  { id: "linuxdo-welfare", name: "LINUX DO · 福利羊毛", kind: "linuxdo", enabled: true, intervalSec: 300, config: { categoryId: 36, rssSlug: "welfare", categoryName: "福利羊毛" } },
+  { id: "linuxdo-resource", name: "LINUX DO · 资源荟萃", kind: "linuxdo", enabled: true, intervalSec: 600, config: { categoryId: 14, rssSlug: "resource", categoryName: "资源荟萃", fixedCategory: "pan" } },
   { id: "linuxdo-develop", name: "LINUX DO · 开发调优", kind: "linuxdo", enabled: true, intervalSec: 600, config: { categoryId: 4, rssSlug: "develop", categoryName: "开发调优" } },
   { id: "linuxdo-news", name: "LINUX DO · 前沿快讯", kind: "linuxdo", enabled: true, intervalSec: 600, config: { categoryId: 34, rssSlug: "news", categoryName: "前沿快讯" } },
   { id: "linuxdo-domestic", name: "LINUX DO · 国产替代", kind: "linuxdo", enabled: true, intervalSec: 1800, config: { categoryId: 98, rssSlug: "domestic", categoryName: "国产替代" } },
   { id: "v2ex-free", name: "V2EX · 免费赠送", kind: "v2ex", enabled: true, intervalSec: 120, config: { node: "free" } },
   { id: "v2ex-deals", name: "V2EX · 优惠信息", kind: "v2ex", enabled: true, intervalSec: 300, config: { node: "deals" } },
-  { id: "v2ex-cloud", name: "V2EX · 云计算", kind: "v2ex", enabled: false, intervalSec: 1800, config: { node: "cloud" } },
-  { id: "v2ex-share", name: "V2EX · 分享发现", kind: "v2ex", enabled: false, intervalSec: 600, config: { node: "share" } },
-  { id: "v2ex-promotions", name: "V2EX · 推广与注册送", kind: "v2ex", enabled: false, intervalSec: 600, config: { node: "promotions" } },
+  { id: "v2ex-cloud", name: "V2EX · 云计算", kind: "v2ex", enabled: true, intervalSec: 1800, config: { node: "cloud" } },
+  { id: "v2ex-share", name: "V2EX · 分享发现", kind: "v2ex", enabled: true, intervalSec: 600, config: { node: "share" } },
+  { id: "v2ex-promotions", name: "V2EX · 推广与注册送", kind: "v2ex", enabled: true, intervalSec: 600, config: { node: "promotions" } },
 
   // === AI / 云 / 开发者福利 ===
   { id: "openrouter-free", name: "OpenRouter · 新免费大模型", kind: "openrouter", enabled: true, intervalSec: 3600, config: { maxAgeDays: 14 } },
@@ -89,8 +89,8 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-lowendtalk", name: "LowEndTalk · 黑五/VPS一手", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "lowendtalk", url: "https://lowendtalk.com/categories/offers/feed.rss", limit: 25, categoryHint: "vps" }] } },
   { id: "rss-lowendspirit", name: "LowEndSpirit · 低价主机", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "lowendspirit", url: "https://lowendspirit.com/discussions/feed.rss", limit: 20, categoryHint: "vps" }] } },
   { id: "rss-vpsgo", name: "VPSGO · 主机促销", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsgo", url: "https://www.vpsgo.com/feed", limit: 20, categoryHint: "vps" }] } },
-  { id: "rss-vpsxb", name: "VPS小站 · 特价主机", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsxb", url: "https://www.vpsxb.net/feed/", limit: 20, categoryHint: "vps" }] } },
-  { id: "rss-lowendbox", name: "LowEndBox · VPS 优惠", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "lowendbox", url: "https://lowendbox.com/feed/", limit: 20 }] } },
+  { id: "rss-vpsxb", name: "VPS小站 · 特价主机", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsxb", url: "https://www.vpsxb.net/feed/", limit: 20, categoryHint: "vps" }] } },
+  { id: "rss-lowendbox", name: "LowEndBox · VPS 优惠", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "lowendbox", url: "https://lowendbox.com/feed/", limit: 20 }] } },
   // 中文主机圈促销博客（2026-11-15 实测 RSS 可用，国内直连）
   { id: "rss-vpsjxw", name: "VPS精选网 · 中文主机促销", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "vpsjxw", url: "https://www.vpsjxw.com/feed", limit: 20, categoryHint: "vps" }] } },
   { id: "rss-laozuo", name: "老左博客 · VPS 优惠", kind: "rss", enabled: true, intervalSec: 1800, config: { kindHint: "deal", categoryHint: "vps", feeds: [{ id: "laozuo", url: "https://www.laozuo.org/feed", limit: 15, categoryHint: "vps" }] } },
@@ -113,7 +113,7 @@ export const SEEDS: SourceSeed[] = [
   { id: "tg-freegames", name: "TG · 免费游戏情报", kind: "telegram", enabled: true, intervalSec: 300, config: { channels: ["freegamesnews", "steamfreebies"] } },
   { id: "tg-pan-yunpan", name: "TG · 网盘资源收藏（迅雷/阿里/夸克）", kind: "telegram", enabled: true, intervalSec: 600, config: { channels: ["yunpanxunlei", "sharealiyun", "yunpans"], fixedCategory: "pan" } },
   { id: "tg-pan-yiove", name: "TG · Yiove 综合资源（资料/图书/游戏）", kind: "telegram", enabled: true, intervalSec: 900, config: { channels: ["YioveComplex"], fixedCategory: "pan", splitNumbered: true } },
-  { id: "gog-free", name: "GOG · 限时免费", kind: "gog", enabled: false, config: {} },
+  { id: "gog-free", name: "GOG · 限时免费", kind: "gog", enabled: true, config: {} },
 
   // === 正版软件限免 / 工具 ===
   { id: "rss-giveawayoftheday", name: "Giveaway of the Day · 每日限免软件", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "giveawayoftheday", url: "https://www.giveawayoftheday.com/feed/", limit: 20 }] } },
@@ -128,25 +128,25 @@ export const SEEDS: SourceSeed[] = [
   },
   { id: "rss-ghxi", name: "果核剥壳 · 免费软件资源", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "ghxi", url: "https://www.ghxi.com/feed", limit: 20 }] } },
   { id: "rss-yxssp", name: "异星软件空间 · 免费软件", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "freebie", categoryHint: "software", feeds: [{ id: "yxssp", url: "https://www.yxssp.com/feed", limit: 20, categoryHint: "software" }] } },
-  { id: "rss-freegroup", name: "FreeGroup · 免费资源网络社群", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freegroup", url: "https://free.com.tw/feed/", limit: 20 }] } },
-  { id: "rss-iplaysoft", name: "异次元软件世界", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "iplaysoft", url: "https://www.iplaysoft.com/feed", limit: 25 }] } },
+  { id: "rss-freegroup", name: "FreeGroup · 免费资源网络社群", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freegroup", url: "https://free.com.tw/feed/", limit: 20 }] } },
+  { id: "rss-iplaysoft", name: "异次元软件世界", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "iplaysoft", url: "https://www.iplaysoft.com/feed", limit: 25 }] } },
 
   // === Reddit 高纯度白嫖社区（适度拉长间隔防 429）===
-  { id: "rss-reddit-freegames", name: "Reddit · FreeGameFindings", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "freegamefindings", url: "https://www.reddit.com/r/FreeGameFindings/hot.rss", limit: 30 }] } },
-  { id: "rss-reddit-freebies", name: "Reddit · freebies", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "freebies", url: "https://www.reddit.com/r/freebies/hot.rss", limit: 25 }] } },
-  { id: "rss-reddit-efreebies", name: "Reddit · eFreebies", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "efreebies", url: "https://www.reddit.com/r/efreebies/hot.rss", limit: 25 }] } },
-  { id: "rss-reddit-apphookup", name: "Reddit · AppHookup（App 限免）", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "apphookup", url: "https://www.reddit.com/r/AppHookup/hot.rss", limit: 25 }] } },
-  { id: "rss-reddit-freeebooks", name: "Reddit · FreeEBOOKS", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "freeebooks", url: "https://www.reddit.com/r/FreeEBOOKS/hot.rss", limit: 25 }] } },
-  { id: "rss-reddit-freegamesonsteam", name: "Reddit · FreeGamesOnSteam", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "freegamesonsteam", url: "https://www.reddit.com/r/FreeGamesOnSteam/hot.rss", limit: 25 }] } },
-  { id: "rss-reddit-gamedeals", name: "Reddit · GameDeals（含打折）", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "gamedeals", url: "https://www.reddit.com/r/GameDeals/hot.rss", limit: 30 }] } },
-  { id: "rss-reddit-googleplay", name: "Reddit · GooglePlayDeals", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "googleplaydeals", url: "https://www.reddit.com/r/googleplaydeals/hot.rss", limit: 30 }] } },
+  { id: "rss-reddit-freegames", name: "Reddit · FreeGameFindings", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "freegamefindings", url: "https://www.reddit.com/r/FreeGameFindings/hot.rss", limit: 30 }] } },
+  { id: "rss-reddit-freebies", name: "Reddit · freebies", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "freebies", url: "https://www.reddit.com/r/freebies/hot.rss", limit: 25 }] } },
+  { id: "rss-reddit-efreebies", name: "Reddit · eFreebies", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "efreebies", url: "https://www.reddit.com/r/efreebies/hot.rss", limit: 25 }] } },
+  { id: "rss-reddit-apphookup", name: "Reddit · AppHookup（App 限免）", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "apphookup", url: "https://www.reddit.com/r/AppHookup/hot.rss", limit: 25 }] } },
+  { id: "rss-reddit-freeebooks", name: "Reddit · FreeEBOOKS", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "freeebooks", url: "https://www.reddit.com/r/FreeEBOOKS/hot.rss", limit: 25 }] } },
+  { id: "rss-reddit-freegamesonsteam", name: "Reddit · FreeGamesOnSteam", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "freegamesonsteam", url: "https://www.reddit.com/r/FreeGamesOnSteam/hot.rss", limit: 25 }] } },
+  { id: "rss-reddit-gamedeals", name: "Reddit · GameDeals（含打折）", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "gamedeals", url: "https://www.reddit.com/r/GameDeals/hot.rss", limit: 30 }] } },
+  { id: "rss-reddit-googleplay", name: "Reddit · GooglePlayDeals", kind: "rss", enabled: true, intervalSec: 7200, config: { feeds: [{ id: "googleplaydeals", url: "https://www.reddit.com/r/googleplaydeals/hot.rss", limit: 30 }] } },
 
   // === 综合样品与地区好价 ===
-  { id: "rss-freebieshark", name: "FreebieShark 免费样品", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "freebieshark", url: "https://www.freebieshark.com/feed/", limit: 25 }] } },
-  { id: "rss-heyitsfree", name: "HeyItsFree 免费样品", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "heyitsfree", url: "https://heyitsfree.net/feed/", limit: 30 }] } },
-  { id: "rss-ozbargain", name: "OzBargain · 澳区免费好价", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "ozbargain", url: "https://www.ozbargain.com.au/feed", limit: 25 }] } },
-  { id: "rss-freestufftimes", name: "FreeStuffTimes · 0元样品", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freestufftimes", url: "https://www.freestufftimes.com/feed", limit: 25 }] } },
-  { id: "rss-freeflys", name: "FreeFlys · 0元样品", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freeflys", url: "https://www.freeflys.com/feed/", limit: 20 }] } },
+  { id: "rss-freebieshark", name: "FreebieShark 免费样品", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "freebieshark", url: "https://www.freebieshark.com/feed/", limit: 25 }] } },
+  { id: "rss-heyitsfree", name: "HeyItsFree 免费样品", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "heyitsfree", url: "https://heyitsfree.net/feed/", limit: 30 }] } },
+  { id: "rss-ozbargain", name: "OzBargain · 澳区免费好价", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "ozbargain", url: "https://www.ozbargain.com.au/feed", limit: 25 }] } },
+  { id: "rss-freestufftimes", name: "FreeStuffTimes · 0元样品", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freestufftimes", url: "https://www.freestufftimes.com/feed", limit: 25 }] } },
+  { id: "rss-freeflys", name: "FreeFlys · 0元样品", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "freebie", feeds: [{ id: "freeflys", url: "https://www.freeflys.com/feed/", limit: 20 }] } },
 
   // === 登录态站点（VPS Cookie 托管定时采集 / 或本机油猴脚本回传）===
   { id: "zhihu-search", name: "知乎 · 福利搜索", kind: "ingest", enabled: true, intervalSec: 3600, config: { keyword: "免费领取" } },
@@ -165,14 +165,31 @@ export const SEEDS: SourceSeed[] = [
   { id: "weibo-freebies", name: "微博 · 福利搜索（噪声高，默认关）", kind: "weibo", enabled: false, intervalSec: 1800, config: { keywords: ["免费领取", "白嫖攻略", "羊毛"], limitPerKeyword: 20 } },
 
   // === 按需选开的低纯度 / 需代理 / 扩展源（默认关闭以保持低噪与轻量化）===
-  { id: "tg-cn-deals", name: "TG · 中文科技/VPS/羊毛", kind: "telegram", enabled: false, intervalSec: 300, config: { channels: ["zaihuapd", "zaihuanews", "v2ex_channel", "appinnfeed"] } },
-  { id: "bsky-gamedeals", name: "Bluesky · 游戏限免大号", kind: "bsky", enabled: false, intervalSec: 1800, config: { actors: ["freegamefindings.bsky.social", "freegamealert.bsky.social", "wario64.bsky.social", "cheapassgamer.com", "dekudeals.com", "steamdb.bsky.social"], limitPerActor: 10 } },
-  { id: "bsky-plugins", name: "Bluesky · 免费插件与综合", kind: "bsky", enabled: false, intervalSec: 1800, config: { actors: ["plugindeals.net", "frugalfreebies.bsky.social", "freebies.bsky.social"], limitPerActor: 10 } },
+  { id: "tg-cn-deals", name: "TG · 中文科技/VPS/羊毛", kind: "telegram", enabled: true, intervalSec: 300, config: { channels: ["zaihuapd", "zaihuanews", "v2ex_channel", "appinnfeed"] } },
+  { id: "bsky-gamedeals", name: "Bluesky · 游戏限免大号", kind: "bsky", enabled: true, intervalSec: 1800, config: { actors: ["freegamefindings.bsky.social", "freegamealert.bsky.social", "wario64.bsky.social", "cheapassgamer.com", "dekudeals.com", "steamdb.bsky.social"], limitPerActor: 10 } },
+  { id: "bsky-plugins", name: "Bluesky · 免费插件与综合", kind: "bsky", enabled: true, intervalSec: 1800, config: { actors: ["plugindeals.net", "frugalfreebies.bsky.social", "freebies.bsky.social"], limitPerActor: 10 } },
   { id: "rss-hip2save", name: "Hip2Save · 美国优惠", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "hip2save", url: "https://hip2save.com/feed/", limit: 30 }] } },
   { id: "rss-vonbeau", name: "VonBeau · 免费样品（需过盾）", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "vonbeau", url: "https://www.vonbeau.com/feed/", limit: 30 }] } },
   { id: "rss-slickdeals", name: "Slickdeals（需过盾）", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "slickdeals", url: "https://slickdeals.net/newsearch.php?rss=1&searcharea=deals&searchin=first", limit: 30 }] } },
-  { id: "rss-appinn", name: "小众软件 Appinn", kind: "rss", enabled: false, config: { feeds: [{ id: "appinn", url: "https://www.appinn.com/feed/", limit: 20 }] } },
-  { id: "rss-sspai", name: "少数派", kind: "rss", enabled: false, config: { feeds: [{ id: "sspai", url: "https://sspai.com/feed", limit: 20 }] } },
+  { id: "rss-appinn", name: "小众软件 Appinn", kind: "rss", enabled: true, config: { feeds: [{ id: "appinn", url: "https://www.appinn.com/feed/", limit: 20 }] } },
+  { id: "rss-sspai", name: "少数派", kind: "rss", enabled: true, config: { feeds: [{ id: "sspai", url: "https://sspai.com/feed", limit: 20 }] } },
+  { id: "rss-oschina", name: "开源中国 OSChina", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "oschina", url: "https://www.oschina.net/news/rss", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-geekpark", name: "极客公园", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "geekpark", url: "https://www.geekpark.net/rss", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-juejin", name: "掘金", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "juejin", url: "https://juejin.cn/rss", limit: 20, categoryHint: "dev" }] } },
+  // 中文开发资讯（2026-11-20 Box 上 curl 实测 200 + 有效 RSS/Atom）
+  { id: "rss-infoq", name: "InfoQ 中文站 · 软件开发", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "infoq", url: "https://www.infoq.cn/feed", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-cnblogs", name: "博客园 · 首页", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "cnblogs", url: "https://feed.cnblogs.com/blog/sitehome/rss", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-segmentfault", name: "SegmentFault 思否", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "segmentfault", url: "https://segmentfault.com/feeds", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-v2ex", name: "V2EX · 最新主题", kind: "rss", enabled: true, intervalSec: 900, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "v2ex", url: "https://www.v2ex.com/index.xml", limit: 30, categoryHint: "tech" }] } },
+  // 蜜柑通用 RSS 不带 bangumiId 时返回空频道（2026-11-17 实测 200 但 0 条），需指定番剧才可用，故默认关闭；新番资源改走动漫花园 rss-dmhy
+  { id: "rss-mikan", name: "蜜柑计划 · 新番更新", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "media", feeds: [{ id: "mikan", url: "https://mikanani.me/RSS/Bangumi", limit: 30, categoryHint: "media" }] } },
+  { id: "rss-dmhy", name: "动漫花园 · 新番资源", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "media", feeds: [{ id: "dmhy", url: "https://share.dmhy.org/topics/rss/rss.xml", limit: 30, categoryHint: "media" }] } },
+  { id: "rss-hf-blog", name: "Hugging Face 博客", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "ai", feeds: [{ id: "hf-blog", url: "https://huggingface.co/blog/feed.xml", limit: 15, categoryHint: "ai" }] } },
+  { id: "rss-github-blog", name: "GitHub 博客", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "github-blog", url: "https://github.blog/feed/", limit: 15, categoryHint: "dev" }] } },
+  { id: "rss-theverge", name: "The Verge · 科技前沿", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "theverge", url: "https://www.theverge.com/rss/index.xml", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-ars", name: "Ars Technica · 科技深读", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "ars", url: "https://arstechnica.com/feed/", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-gcores", name: "机核 Gcores", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "game", feeds: [{ id: "gcores", url: "https://www.gcores.com/rss", limit: 20, categoryHint: "game" }] } },
+  { id: "rss-landiannews", name: "蓝点网", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "landiannews", url: "https://www.landiannews.com/feed/", limit: 20, categoryHint: "tech" }] } },
   // === 重要新闻（央视新闻 / 中新网 / 国际权威中文媒体，直入「重要新闻」频道，严禁导购/社区源混入）===
   {
     id: "cctv-news",
@@ -190,15 +207,15 @@ export const SEEDS: SourceSeed[] = [
       ],
     },
   },
-  { id: "rss-chinanews-china", name: "中新网 · 时政国内", kind: "rss", enabled: true, intervalSec: 1800, config: { feeds: [{ id: "chinanews-china", url: "https://www.chinanews.com.cn/rss/china.xml", limit: 20, categoryHint: "headline" }] } },
-  { id: "rss-chinanews-world", name: "中新网 · 国际要闻", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "chinanews-world", url: "https://www.chinanews.com.cn/rss/world.xml", limit: 20, categoryHint: "world" }] } },
+  { id: "rss-chinanews-china", name: "中新网 · 时政国内", kind: "rss", enabled: false, intervalSec: 1800, config: { feeds: [{ id: "chinanews-china", url: "https://www.chinanews.com.cn/rss/china.xml", limit: 20, categoryHint: "headline" }] } },
+  { id: "rss-chinanews-world", name: "中新网 · 国际要闻", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "chinanews-world", url: "https://www.chinanews.com.cn/rss/world.xml", limit: 20, categoryHint: "world" }] } },
   { id: "rss-chinanews-scroll", name: "中新网 · 滚动要闻", kind: "rss", enabled: true, intervalSec: 1800, config: { feeds: [{ id: "chinanews-scroll", url: "https://www.chinanews.com.cn/rss/scroll-news.xml", limit: 25, categoryHint: "headline" }] } },
-  { id: "rss-gnews-cn", name: "Google News · 中文要闻", kind: "rss", enabled: false, intervalSec: 1800, config: { feeds: [{ id: "gnews-cn", url: "https://news.google.com/rss?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 25, categoryHint: "headline" }] } },
+  { id: "rss-gnews-cn", name: "Google News · 中文要闻", kind: "rss", enabled: true, intervalSec: 1800, config: { feeds: [{ id: "gnews-cn", url: "https://news.google.com/rss?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 25, categoryHint: "headline" }] } },
   { id: "rss-gnews-world", name: "Google News · 国际头条", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "gnews-world", url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "world" }] } },
-  { id: "rss-bbc-zh", name: "BBC 中文 · 国际要闻", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "bbc-zh", url: "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", limit: 20, categoryHint: "world" }] } },
-  { id: "rss-dw-cn", name: "德国之声 · 中文要闻", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "dw-cn", url: "https://rss.dw.com/xml/rss-chi-all", limit: 20, categoryHint: "world" }] } },
+  { id: "rss-bbc-zh", name: "BBC 中文 · 国际要闻", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "bbc-zh", url: "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml", limit: 20, categoryHint: "world" }] } },
+  { id: "rss-dw-cn", name: "德国之声 · 中文要闻", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "dw-cn", url: "https://rss.dw.com/xml/rss-chi-all", limit: 20, categoryHint: "world" }] } },
   { id: "rss-rfi-cn", name: "法广中文 · 国际时政", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "rfi-cn", url: "https://www.rfi.fr/cn/rss", limit: 20, categoryHint: "world" }] } },
-  { id: "rss-nikkei-cn", name: "日经中文网 · 亚洲政经", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "news", categoryHint: "world", feeds: [{ id: "nikkei-cn", url: "https://cn.nikkei.com/rss.html", limit: 20, categoryHint: "world" }] } },
+  { id: "rss-nikkei-cn", name: "日经中文网 · 亚洲政经", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "news", categoryHint: "world", feeds: [{ id: "nikkei-cn", url: "https://cn.nikkei.com/rss.html", limit: 20, categoryHint: "world" }] } },
   { id: "rss-voa-cn", name: "美国之音中文 · 国际要闻", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "news", categoryHint: "world", feeds: [{ id: "voa-cn", url: "https://www.voachinese.com/api/", limit: 20, categoryHint: "world" }] } },
 
   // === 行业资讯（经济 / 股票 / 科技 / AI / 数码，直入「行业资讯」频道）===
@@ -206,7 +223,7 @@ export const SEEDS: SourceSeed[] = [
     id: "cctv-economy",
     name: "央视新闻 · 财经经济",
     kind: "cctv",
-    enabled: true,
+    enabled: false,
     intervalSec: 3600,
     config: { channels: [{ channel: "economy_zixun", cb: "economy_zixun", categoryHint: "finance", limit: 15 }] },
   },
@@ -214,7 +231,7 @@ export const SEEDS: SourceSeed[] = [
     id: "cctv-tech",
     name: "央视新闻 · 科技前沿",
     kind: "cctv",
-    enabled: true,
+    enabled: false,
     intervalSec: 3600,
     config: { channels: [{ channel: "tech", cb: "tech", categoryHint: "tech", limit: 15 }] },
   },
@@ -226,25 +243,24 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-gnews-biz", name: "Google News · 商业财经头条", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-biz", url: "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 25, categoryHint: "finance" }] } },
   { id: "rss-gnews-cls", name: "财联社要闻（Google News）", kind: "rss", enabled: false, intervalSec: 1800, config: { kindHint: "info", categoryHint: "stock", feeds: [{ id: "gnews-cls", url: "https://news.google.com/rss/search?q=site:cls.cn&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "stock" }] } },
   { id: "rss-gnews-yicai", name: "第一财经（Google News）", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "finance", feeds: [{ id: "gnews-yicai", url: "https://news.google.com/rss/search?q=site:yicai.com&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "finance" }] } },
-  { id: "rss-gnews-tech", name: "Google News · 科技头条", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "gnews-tech", url: "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "tech" }] } },
-  { id: "rss-openai-blog", name: "OpenAI 官方博客", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "ai", feeds: [{ id: "openai-blog", url: "https://openai.com/news/rss.xml", limit: 15, categoryHint: "ai" }] } },
-  { id: "rss-cloudflare-blog", name: "Cloudflare 技术博客", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "cloud", feeds: [{ id: "cloudflare-blog", url: "https://blog.cloudflare.com/rss/", limit: 15, categoryHint: "cloud" }] } },
+  { id: "rss-gnews-tech", name: "Google News · 科技头条", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "gnews-tech", url: "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=zh-CN&gl=CN&ceid=CN:zh-Hans", limit: 20, categoryHint: "tech" }] } },
+  { id: "rss-openai-blog", name: "OpenAI 官方博客", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "ai", feeds: [{ id: "openai-blog", url: "https://openai.com/news/rss.xml", limit: 15, categoryHint: "ai" }] } },
+  { id: "rss-cloudflare-blog", name: "Cloudflare 技术博客", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "cloud", feeds: [{ id: "cloudflare-blog", url: "https://blog.cloudflare.com/rss/", limit: 15, categoryHint: "cloud" }] } },
   { id: "rss-chinanews-finance", name: "中新网 · 财经资讯", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "chinanews-finance", url: "https://www.chinanews.com.cn/rss/finance.xml", limit: 20 }] } },
   { id: "rss-chinanews-it", name: "中新网 · IT 科技", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "chinanews-it", url: "https://www.chinanews.com.cn/rss/it.xml", limit: 20 }] } },
-  { id: "rss-solidot", name: "Solidot · 极客科技", kind: "rss", enabled: false, intervalSec: 3600, config: { feeds: [{ id: "solidot", url: "https://www.solidot.org/index.rss", limit: 20 }] } },
-  { id: "rss-ithome", name: "IT之家", kind: "rss", enabled: false, config: { feeds: [{ id: "ithome", url: "https://www.ithome.com/rss/", limit: 25 }] } },
-  { id: "rss-smzdm", name: "什么值得买", kind: "rss", enabled: false, config: { feeds: [{ id: "smzdm", url: "https://www.smzdm.com/rss/", limit: 20 }] } },
-  { id: "rss-fuliba", name: "福利吧", kind: "rss", enabled: false, config: { feeds: [{ id: "fuliba", url: "https://fuliba.net/feed", limit: 30 }] } },
-  // 52pojie 全站 RSS 实测为破解教程与求资源混排（2026-11-15），福利纯度不足，故保持关闭
-  { id: "rss-52pojie", name: "吾爱破解", kind: "rss", enabled: false, config: { feeds: [{ id: "52pojie", url: "https://www.52pojie.cn/forum.php?mod=rss", limit: 20 }] } },
+  { id: "rss-solidot", name: "Solidot · 极客科技", kind: "rss", enabled: true, intervalSec: 3600, config: { feeds: [{ id: "solidot", url: "https://www.solidot.org/index.rss", limit: 20 }] } },
+  { id: "rss-ithome", name: "IT之家", kind: "rss", enabled: true, config: { feeds: [{ id: "ithome", url: "https://www.ithome.com/rss/", limit: 25 }] } },
+  { id: "rss-smzdm", name: "什么值得买", kind: "rss", enabled: true, config: { feeds: [{ id: "smzdm", url: "https://www.smzdm.com/rss/", limit: 20 }] } },
+  { id: "rss-fuliba", name: "福利吧", kind: "rss", enabled: true, config: { feeds: [{ id: "fuliba", url: "https://fuliba.net/feed", limit: 30 }] } },
+  { id: "rss-52pojie", name: "吾爱破解", kind: "rss", enabled: true, config: { feeds: [{ id: "52pojie", url: "https://www.52pojie.cn/forum.php?mod=rss", limit: 20 }] } },
   { id: "rss-9to5toys", name: "9to5Toys 优惠", kind: "rss", enabled: false, config: { feeds: [{ id: "9to5toys", url: "https://9to5toys.com/feed/", limit: 25 }] } },
-  { id: "rss-producthunt", name: "Product Hunt", kind: "rss", enabled: false, config: { feeds: [{ id: "producthunt", url: "https://www.producthunt.com/feed", limit: 25 }] } },
-  { id: "rss-hnrss", name: "Hacker News（100+ 分）", kind: "rss", enabled: false, config: { feeds: [{ id: "hnrss", url: "https://hnrss.org/frontpage?points=100", limit: 25 }] } },
-  { id: "rss-ruanyifeng", name: "阮一峰 · 科技爱好者周刊", kind: "rss", enabled: false, intervalSec: 21600, config: { feeds: [{ id: "ruanyifeng", url: "https://www.ruanyifeng.com/blog/atom.xml", limit: 10 }] } },
-  { id: "github-free-for-dev", name: "GitHub · free-for-dev", kind: "github-readme", enabled: false, config: { repos: [{ repo: "ripienaar/free-for-dev", limit: 60 }] } },
-  { id: "github-public-apis", name: "GitHub · 免费公开 API", kind: "github-readme", enabled: false, config: { repos: [{ repo: "public-apis/public-apis", limit: 40 }] } },
-  { id: "github-awesome-ai", name: "GitHub · AI 工具清单", kind: "github-readme", enabled: false, config: { repos: [{ repo: "mahseema/awesome-ai-tools", limit: 40 }] } },
-  { id: "github-selfhosted", name: "GitHub · 开源自托管清单", kind: "github-readme", enabled: false, config: { repos: [{ repo: "awesome-selfhosted/awesome-selfhosted", limit: 40 }] } },
+  { id: "rss-producthunt", name: "Product Hunt", kind: "rss", enabled: true, config: { feeds: [{ id: "producthunt", url: "https://www.producthunt.com/feed", limit: 25 }] } },
+  { id: "rss-hnrss", name: "Hacker News（100+ 分）", kind: "rss", enabled: true, config: { feeds: [{ id: "hnrss", url: "https://hnrss.org/frontpage?points=100", limit: 25 }] } },
+  { id: "rss-ruanyifeng", name: "阮一峰 · 科技爱好者周刊", kind: "rss", enabled: true, intervalSec: 21600, config: { feeds: [{ id: "ruanyifeng", url: "https://www.ruanyifeng.com/blog/atom.xml", limit: 10 }] } },
+  { id: "github-free-for-dev", name: "GitHub · free-for-dev", kind: "github-readme", enabled: true, config: { repos: [{ repo: "ripienaar/free-for-dev", limit: 60 }] } },
+  { id: "github-public-apis", name: "GitHub · 免费公开 API", kind: "github-readme", enabled: true, config: { repos: [{ repo: "public-apis/public-apis", limit: 40 }] } },
+  { id: "github-awesome-ai", name: "GitHub · AI 工具清单", kind: "github-readme", enabled: true, config: { repos: [{ repo: "mahseema/awesome-ai-tools", limit: 40 }] } },
+  { id: "github-selfhosted", name: "GitHub · 开源自托管清单", kind: "github-readme", enabled: true, config: { repos: [{ repo: "awesome-selfhosted/awesome-selfhosted", limit: 40 }] } },
   { id: "tg-channels", name: "Telegram 羊毛频道", kind: "telegram", enabled: false, config: { channels: [] } },
 ];
 
@@ -376,7 +392,7 @@ async function dispatchFresh(
   log(`[${sourceId}] ${nonNoise.length}/${fresh.length} 条入 AI 异步审核队列`);
 }
 export function ingestItems(sourceId: string, items: RawItem[]): { inserted: number; skipped: number } {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
   const runRow = run("INSERT INTO runs (source_id, started_at, status) VALUES (?, ?, 'running')", sourceId, startedAt);
@@ -392,7 +408,7 @@ export function ingestItems(sourceId: string, items: RawItem[]): { inserted: num
       "UPDATE runs SET finished_at = ?, status = 'ok', fetched = ?, inserted = ?, skipped = ?, duration_ms = ? WHERE id = ?",
       new Date().toISOString(), items.length, saved.inserted, saved.skipped, durationMs, runId,
     );
-    run("UPDATE sources SET last_run_at = ?, last_status = 'ok', last_error = NULL WHERE id = ?", startedAt, sourceId);
+    run("UPDATE sources SET last_run_at = ?, last_status = 'ok', last_error = NULL, consecutive_failures = 0 WHERE id = ?", startedAt, sourceId);
     return saved;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -400,7 +416,7 @@ export function ingestItems(sourceId: string, items: RawItem[]): { inserted: num
       "UPDATE runs SET finished_at = ?, status = 'failed', fetched = ?, error = ?, duration_ms = ? WHERE id = ?",
       new Date().toISOString(), items.length, message, Date.now() - t0, runId,
     );
-    run("UPDATE sources SET last_run_at = ?, last_status = 'failed', last_error = ? WHERE id = ?", startedAt, message.slice(0, 300), sourceId);
+    run("UPDATE sources SET last_run_at = ?, last_status = 'failed', last_error = ?, consecutive_failures = COALESCE(consecutive_failures, 0) + 1 WHERE id = ?", startedAt, message.slice(0, 300), sourceId);
     throw err;
   }
 }
@@ -411,7 +427,7 @@ export function markSourceFailure(
   reason: string,
   status: "degraded" | "failed" = "degraded",
 ): { ok: true; status: string } {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const now = new Date().toISOString();
   run(
     "INSERT INTO runs (source_id, started_at, finished_at, status, fetched, inserted, skipped, duration_ms, error) VALUES (?, ?, ?, ?, 0, 0, 0, 0, ?)",
@@ -429,6 +445,12 @@ type SourceRow = {
   config: string;
   cursor: string | null;
 };
+
+/** 轻量按需同步：源已在库里时只做一次 SELECT，不跑全量 upsert；缺失时才跑一次 ensureSources() 补齐（如部署后新增的 SEEDS）。 */
+export function ensureSourceExists(sourceId: string): void {
+  const row = get<{ id: string }>("SELECT id FROM sources WHERE id = ?", sourceId);
+  if (!row) ensureSources();
+}
 
 export function ensureSources(seeds: SourceSeed[] = SEEDS): void {
   const now = new Date().toISOString();
@@ -835,7 +857,7 @@ export async function runSource(
   sourceId: string,
   options: { http?: HttpClient; maxItems?: number; log?: (message: string) => void } = {},
 ): Promise<RunSummary> {
-  ensureSources();
+  ensureSourceExists(sourceId);
   const log = options.log ?? ((m: string) => console.log(m));
   const source = get<SourceRow>("SELECT * FROM sources WHERE id = ?", sourceId);
   if (!source) throw new Error(`unknown source: ${sourceId}`);
@@ -905,11 +927,12 @@ export async function runSource(
     runId,
   );
   run(
-    "UPDATE sources SET cursor = ?, last_run_at = ?, last_status = ?, last_error = ? WHERE id = ?",
+    "UPDATE sources SET cursor = ?, last_run_at = ?, last_status = ?, last_error = ?, consecutive_failures = CASE WHEN ? = 'failed' THEN COALESCE(consecutive_failures, 0) + 1 ELSE 0 END WHERE id = ?",
     cursor,
     startedAt,
     status,
     error,
+    status,
     sourceId,
   );
 
@@ -925,7 +948,6 @@ export async function runSource(
 export async function runAll(
   options: { http?: HttpClient; maxItems?: number; log?: (message: string) => void } = {},
 ): Promise<RunSummary[]> {
-  ensureSources();
   // kind="ingest" 仅在服务端托管了对应站点 Cookie 且配置了执行器时才参与定时调度，否则留给本机回传
   const rows = all<{ id: string; kind: string }>("SELECT id, kind FROM sources WHERE enabled = 1 ORDER BY id")
     .filter((r) => BY_KIND.has(r.kind) && (r.kind !== "ingest" || hasCookieConfiguredForSource(r.id)))

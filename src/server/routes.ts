@@ -161,8 +161,8 @@ export type ItemRow = {
   canonical_id?: number | null;
 };
 
-// List payloads never select full snapshots. The drawer fetches content on demand.
-const LIST_COLUMNS = "id, source_id, external_id, url, url_key, title_key, title, SUBSTR(summary, 1, 1200) AS summary, author, category, image_url, kind, ai_quality, tags, codes, price, is_free, obtain, score, expires_at, published_at, status, starred, ai, read_at, pushed_at, first_seen_at, last_seen_at, canonical_id";
+// List and related payloads never select full snapshots (no content/raw). The drawer fetches content on demand via /api/items/:id.
+const LIST_COLUMNS = "items.id, items.source_id, items.external_id, items.url, items.url_key, items.title_key, items.title, SUBSTR(items.summary, 1, 1200) AS summary, items.author, items.category, items.image_url, items.kind, items.ai_quality, items.tags, items.codes, items.price, items.is_free, items.obtain, items.score, items.expires_at, items.published_at, items.status, items.starred, items.ai, items.read_at, items.pushed_at, items.first_seen_at, items.last_seen_at, items.canonical_id";
 
 /** 订阅命中的关键词（都转小写比较），用于前端高亮与筛选。 */
 function matchKeywords(row: ItemRow, keywords: string[]): string[] {
@@ -827,10 +827,8 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
   app.get("/api/items/:id/related", (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isFinite(id)) return c.json({ error: "bad id" }, 400);
-    const self = get<ItemRow & { source_name?: string }>(
-      `SELECT items.*, s.name AS source_name
-         FROM items LEFT JOIN sources s ON s.id = items.source_id
-        WHERE items.id = ?`,
+    const self = get<{ id: number; kind: string | null; category: string | null }>(
+      `SELECT id, kind, category FROM items WHERE id = ?`,
       id,
     );
     if (!self) return c.json({ items: [] });
@@ -847,7 +845,7 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
     if (!memberIds.length) return c.json({ items: [] });
 
     const members = all<ItemRow & { source_name?: string }>(
-      `SELECT items.*, s.name AS source_name
+      `SELECT ${LIST_COLUMNS}, s.name AS source_name
          FROM items LEFT JOIN sources s ON s.id = items.source_id
         WHERE items.id IN (${memberIds.map(() => "?").join(",")})
         ORDER BY items.score DESC, items.id ASC`,
