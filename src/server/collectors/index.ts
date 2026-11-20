@@ -176,6 +176,10 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-oschina", name: "开源中国 OSChina", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "oschina", url: "https://www.oschina.net/news/rss", limit: 20, categoryHint: "dev" }] } },
   { id: "rss-geekpark", name: "极客公园", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "geekpark", url: "https://www.geekpark.net/rss", limit: 20, categoryHint: "tech" }] } },
   { id: "rss-juejin", name: "掘金", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "juejin", url: "https://juejin.cn/rss", limit: 20, categoryHint: "dev" }] } },
+  // 中文开发资讯（2026-11-20 Box 上 curl 实测 200 + 有效 RSS/Atom）
+  { id: "rss-infoq", name: "InfoQ 中文站 · 软件开发", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "infoq", url: "https://www.infoq.cn/feed", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-cnblogs", name: "博客园 · 首页", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "cnblogs", url: "https://feed.cnblogs.com/blog/sitehome/rss", limit: 20, categoryHint: "dev" }] } },
+  { id: "rss-segmentfault", name: "SegmentFault 思否", kind: "rss", enabled: true, intervalSec: 3600, config: { kindHint: "info", categoryHint: "dev", feeds: [{ id: "segmentfault", url: "https://segmentfault.com/feeds", limit: 20, categoryHint: "dev" }] } },
   { id: "rss-v2ex", name: "V2EX · 最新主题", kind: "rss", enabled: true, intervalSec: 900, config: { kindHint: "info", categoryHint: "tech", feeds: [{ id: "v2ex", url: "https://www.v2ex.com/index.xml", limit: 30, categoryHint: "tech" }] } },
   // 蜜柑通用 RSS 不带 bangumiId 时返回空频道（2026-11-17 实测 200 但 0 条），需指定番剧才可用，故默认关闭；新番资源改走动漫花园 rss-dmhy
   { id: "rss-mikan", name: "蜜柑计划 · 新番更新", kind: "rss", enabled: false, intervalSec: 3600, config: { kindHint: "info", categoryHint: "media", feeds: [{ id: "mikan", url: "https://mikanani.me/RSS/Bangumi", limit: 30, categoryHint: "media" }] } },
