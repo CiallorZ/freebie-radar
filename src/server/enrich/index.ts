@@ -343,24 +343,49 @@ export function demoteEditorialGoods(
 /** 资讯类分类：这些分类的内容是报道，不可能是「白拿福利」，AI 判成 freebie 一律降级为 info。 */
 const EDITORIAL_CATEGORIES = new Set(["headline", "world", "finance", "stock", "news"]);
 
+/**
+ * 中性分类：这些分类本身不代表「有东西可领」。AI 把它们判成 freebie 时，标题里必须有领取证据，
+ * 否则「买东西更划算」这类消费测评/比价文会混进真福利频道
+ * （如「茅台告别抢购后，宴席、送礼买酒比以前更划算吗？」被判 freebie + tech + 74 分）。
+ */
+const CLAIM_NEEDED_CATEGORIES = new Set(["tech", "hardware", "other", "headline", "world", "finance", "stock", "news"]);
+
+/** contentSignals().claim 没覆盖、但标题里一样算「真有东西可领」的说法。 */
+const TITLE_CLAIM_RE = /免费|可领|能领|领了|到账|\b(?:free|giveaway|coupon)\b/i;
+
+/** 价格/行情话术：正文出现它，说明讲的是「买得值不值/更划算」，不是「白拿」。 */
+const PRICE_TALK_RE =
+  /\d+(?:\.\d+)?\s*(?:元|块|美元)|[¥￥$]\s*\d|价格|标价|售价|定价|行情|差价|涨价|降价|跌价|调价|折扣|几折|划算|性价比|成本|省下|省钱|赚几|降到|跌到/;
+
 /** 抽奖：免费参与但不确定能拿到，obtain 记 lottery，不进「真福利」。Giveaway 不算（Steam/Epic 送游戏常用它）。 */
 const LOTTERY_TITLE_RE = /sweepstakes|\bwinners?\b|抽奖|抽选|抽签|摇号|赢取/i;
 /** 明确标价的不是白嫖：「Only $9.99」「仅售」「到手价」。 */
 const PRICED_TITLE_RE = /only\s*\$|仅售|到手价|售价\s*[$￥¥]?\s*\d|现价\s*[$￥¥]?\s*\d/i;
 
+/** 证据校验要用到的正文信息：摘要、兑换码、来源（纯白嫖源免检）。 */
+export type FreebieEvidenceExtra = {
+  summary?: string | null;
+  codes?: readonly string[] | null;
+  sourceId?: string | null;
+};
+
 /**
  * 白嫖证据校验（只做否定，不做确认）：
  * - 抽奖类：免费参与但结果不确定 → obtain=lottery，从「真福利」频道排除
  * - 明确标价：不是白嫖 → kind 降为 deal
- * 不判断「是不是福利」，只排除「肯定不是确定福利」的两种情形。
+ * - 资讯类分类：报道不可能有东西可领 → kind 降为 info
+ * - 中性分类 + 无领取证据 + 通篇价格话术：「更划算」不是白嫖 → kind 降为 info
+ * 不判断「是不是福利」，只排除「肯定不是确定福利」的情形。
+ * 返回的 obtain 语义：undefined = 没意见（沿用调用方的值），null = 明确清空，字符串 = 改写。
  */
 export function enforceFreebieEvidence(
   kind: ContentKind,
   obtain: string | null,
   title: string,
   category?: string | null,
-): { kind: ContentKind; obtain: string | null; category?: string | null } {
-  if (kind !== "freebie") return { kind, obtain, category };
+  extra: FreebieEvidenceExtra = {},
+): { kind: ContentKind; obtain?: string | null; category?: string | null } {
+  if (kind !== "freebie") return { kind, category };
   if (LOTTERY_TITLE_RE.test(title)) return { kind, obtain: "lottery", category: "lottery" };
   if (PRICED_TITLE_RE.test(title)) {
     return { kind: "deal", obtain: obtain === "free" || !obtain ? "paid" : obtain, category };
@@ -371,7 +396,21 @@ export function enforceFreebieEvidence(
   if (category && EDITORIAL_CATEGORIES.has(category)) {
     return { kind: "info", obtain: null, category };
   }
-  return { kind, obtain, category };
+  // 中性分类里的消费测评/比价长文：标题没有领取证据、正文全是价格行情 → 不是白嫖。
+  // 纯免费源（Epic/喜加一等）本身就保证有免费对象，免检。
+  if (
+    category &&
+    CLAIM_NEEDED_CATEGORIES.has(category) &&
+    !(extra.sourceId && FREEBIE_ONLY_SOURCES.has(extra.sourceId)) &&
+    !(extra.codes && extra.codes.length)
+  ) {
+    const hasClaim = contentSignals(title).claim || TITLE_CLAIM_RE.test(title);
+    const text = `${title} ${extra.summary ?? ""}`.slice(0, 3000);
+    if (!hasClaim && PRICE_TALK_RE.test(text)) {
+      return { kind: "info", obtain: null, category };
+    }
+  }
+  return { kind, category };
 }
 
 function ageDays(iso: string | null): number {

@@ -1,6 +1,6 @@
 import { all, get, run } from "./db.ts";
 import { calibrateScoreByObtain } from "./enrich/alias.ts";
-import { demoteEditorialGoods, demoteOfflineCategory, enforceFreebieEvidence, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind } from "./enrich/index.ts";
+import { demoteEditorialGoods, demoteOfflineCategory, enforceFreebieEvidence, enrichItem, FREEBIE_ONLY_SOURCES, isCategory, resolveKind, type ContentKind } from "./enrich/index.ts";
 import { guessObtain } from "./enrich/obtain.ts";
 import { isBlocked, loadActiveBlockRules } from "./enrich/blocklist.ts";
 import { aiQueueStats } from "./enrich/ai-queue.ts";
@@ -27,7 +27,7 @@ function updateAi(
   keep: number,
   score: number,
   category: string | null,
-  obtain: string,
+  obtain: string | null,
   kind: string,
   quality: number | null,
 ): void {
@@ -279,9 +279,13 @@ if (!v.keep) rejected += 1;
           guardEnabled: hints.guardEnabled,
         });
         // 白嫖证据校验：抽奖 → lottery，明确标价 → deal
-        const evidenced = enforceFreebieEvidence(kind, obtain, row.title, category);
+        const evidenced = enforceFreebieEvidence(kind, obtain, row.title, category, {
+          summary: row.summary,
+          codes: baseEnriched?.codes,
+          sourceId: row.source_id,
+        });
         kind = evidenced.kind;
-        const finalObtain = evidenced.obtain ?? obtain;
+        const finalObtain = evidenced.obtain === undefined ? obtain : evidenced.obtain;
         const categoryHint = evidenced.category ?? category;
         // 资讯/水帖不许落进实物福利
         let finalCategory = demoteEditorialGoods(
@@ -429,7 +433,17 @@ export function reclassifyStoredItems(scope: "other" | "all" = "other", options:
       });
     }
     const fallbackObtain = guessObtain(r.title, r.summary ?? "");
-    const nextObtain = r.ai_keep === null ? fallbackObtain : (r.obtain ?? fallbackObtain);
+    const autoObtain = r.ai_keep === null ? fallbackObtain : (r.obtain ?? fallbackObtain);
+    // 白嫖证据校验：抽奖 → lottery，明确标价 → deal，资讯分类/无领取证据的价格文 → info。
+    // 修复按钮必须走这道闸，否则真福利里已有的消费测评文点修复也修不掉。
+    const evidenced = enforceFreebieEvidence(nextKind as ContentKind, autoObtain, r.title, nextCat, {
+      summary: r.summary,
+      codes: e.codes,
+      sourceId: r.source_id,
+    });
+    nextKind = evidenced.kind;
+    const nextObtain = evidenced.obtain === undefined ? autoObtain : evidenced.obtain;
+    nextCat = evidenced.category ?? nextCat;
     // 资讯/水帖不许落进实物福利
     nextCat = demoteOfflineCategory(nextCat, nextKind, r.title, r.summary ?? "", e.category) as typeof nextCat;
     ({ category: nextCat, kind: nextKind } = applyManualClassification(r.id, nextCat, nextKind as import("../shared/taxonomy.ts").ContentKind));

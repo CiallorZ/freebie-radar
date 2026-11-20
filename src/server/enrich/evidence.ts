@@ -2,7 +2,7 @@
 export function contentSignals(title: string, summary = "") {
   const clean = (value: string) => value.replace(/https?:\/\/\S+/gi, " ").slice(0, 2000);
   const t = clean(title), text = `${t} ${clean(summary)}`;
-  const claim = /免费(?:领|送|获|拿|使用|开放|下载|入库)|领取|报名领|白嫖|白送|白给|白拿|薅羊毛|羊毛线报|BOGO|零元|0\s*元|限免|喜加一|赠送|激活码|兑换码|公益额度|(?:领|送)\s*\d+(?:[-~至]\d+)?\s*(?:元|话费|积分|额度|tokens?)|(?:免费|赠|送|领).{0,16}(?:额度|积分|token|credits|授权|礼包|券)|(?:free\s+(?:trial|game|software|license|credits|tier|model)|giveaway|coupon|:free\b)/i;
+  const claim = /免费(?:领|送|获|拿|使用|开放|下载|入库)|领取|报名领|白嫖|白送|白给|白拿|薅羊毛|羊毛线报|BOGO|零元|(?<![\d.])0\s*元|限免|喜加一|赠送|激活码|兑换码|公益额度|(?:领|送)\s*\d+(?:[-~至]\d+)?\s*(?:元|话费|积分|额度|tokens?)|(?:免费|赠|送|领).{0,16}(?:额度|积分|token|credits|授权|礼包|券)|(?:free\s+(?:trial|game|software|license|credits|tier|model)|giveaway|coupon|:free\b)/i;
   const sale = /特价|特惠|促销|折扣|史低|优惠券|优惠码|黑五|black\s*friday|cyber\s*monday|%\s*off|\b(?:sale|clearance)\b|\d+(?:\.\d+)?\s*折|年付|月付|元[\/每](?:月|年)|美元[\/每](?:月|年)|\d+(?:\.\d+)?\s*元(?:起|购|到手|包邮)|(?:仅需|只要|低至|现价)\s*\d+|[$¥￥]\s*\d|(?:拼车|合租|车位|发车|明盘|出鸡|转让|出个|出售)/i;
   const incident = /停飞|停航|航班.{0,8}(?:取消|延误)|空难|坠机|遇难|伤亡|地震|战争|爆炸|罢工|旅客.{0,8}(?:遭遇|遇到)|财报|营收|净利润|股价|通胀|降息|政策|新规|召回|事故|发布会|新闻|报道|记者|宣布涨价|套餐下架|机房动态|月度汇总|活动回顾|为什么|到底|实际遇到/;
   const specificFree = (value: string) => /\bfree\s+to\s+keep\b|(?:\bis\s+free\b.{0,20}(?:Epic|Steam|GOG)|(?:游戏|软件|授权|会员|模型).{0,10}免费)|免费.{0,10}(?:游戏|软件|授权|会员|模型)/i.test(value);

@@ -121,9 +121,13 @@ function applyVerdictToItem(itemId: number, verdict: AiVerdict): AppliedVerdict 
       guardEnabled: hints.guardEnabled,
     });
     // 白嫖证据校验：抽奖 → lottery，明确标价 → deal
-    const evidenced = enforceFreebieEvidence(autoKind, effectiveObtain, cur?.title ?? "", rawCategory);
+    const evidenced = enforceFreebieEvidence(autoKind, effectiveObtain, cur?.title ?? "", rawCategory, {
+      summary: cur?.summary,
+      codes: parseCodes(cur?.codes),
+      sourceId: cur?.source_id,
+    });
     const finalKind = evidenced.kind;
-    const finalObtain = evidenced.obtain ?? effectiveObtain;
+    const finalObtain = evidenced.obtain === undefined ? effectiveObtain : evidenced.obtain;
     const finalCategoryHint = evidenced.category ?? rawCategory;
     // 资讯/水帖不许落进实物福利：AI 标错时统一降级到兜底分类
     const autoCategory = demoteEditorialGoods(

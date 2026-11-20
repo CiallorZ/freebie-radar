@@ -620,9 +620,13 @@ function persist(
         : e.kind;
       // 白嫖证据校验：抽奖 → lottery，明确标价 → deal（只做否定，不替 AI 确认福利）
       // 必须把分类传进去：资讯类分类（时政/国际/财经/股票）下的 freebie 判错误要在这里降级
-      const evidenced = enforceFreebieEvidence(effectiveKindRaw, effectiveObtainRaw, e.title, verdict?.category ?? e.category);
+      const evidenced = enforceFreebieEvidence(effectiveKindRaw, effectiveObtainRaw, e.title, verdict?.category ?? e.category, {
+        summary: e.summary,
+        codes: e.codes,
+        sourceId,
+      });
       const effectiveKind = evidenced.kind;
-      const effectiveObtain = evidenced.obtain ?? effectiveObtainRaw;
+      const effectiveObtain = evidenced.obtain === undefined ? effectiveObtainRaw : evidenced.obtain;
       const kindCategory = evidenced.category ?? undefined;
       // AI 给出的分类优先于关键词规则（以前这里只用规则结果，AI 判对的分类被丢掉）；
       // 再统一收口：资讯/水帖不许落进实物福利

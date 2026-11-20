@@ -5,7 +5,7 @@ import { Hono } from "hono";
 Object.assign(process.env, { DATABASE_PATH: ":memory:", SITE_MODE: "selfhost", ADMIN_TOKEN: "", NODE_ENV: "development", RATE_LIMIT_ENABLED: "false", ENABLE_SCHEDULER: "false", PUSH_CHANNEL: "none", AI_BASE_URL: "", AI_MODEL: "" });
 const { migrate, run, get, closeDb } = await import("../src/server/db.ts");
 const { ensureSources, ingestItems } = await import("../src/server/collectors/index.ts");
-const { enrichItem } = await import("../src/server/enrich/index.ts");
+const { enrichItem, enforceFreebieEvidence } = await import("../src/server/enrich/index.ts");
 const { resolveKind, guessKind } = await import("../src/server/enrich/kind.ts");
 const { isNoiseTitle } = await import("../src/server/enrich/noise.ts");
 const { registerApi } = await import("../src/server/routes.ts");
@@ -241,4 +241,43 @@ test("人工移动后热点缓存与 RSS ETag 立即更新", async () => {
   const updated = await app.request("/rss.xml?source=linuxdo-welfare", { headers: { "if-none-match": etag! } });
   assert.equal(updated.status, 200);
   assert.notEqual(updated.headers.get("etag"), etag);
+});
+
+test("中性分类里「买东西更划算」不是白嫖：消费测评文不进真福利", async () => {
+  // 什么值得买的长文：标题没有领取证据、正文全是价格行情 → info
+  const editorial: [string, string][] = [
+    ["茅台告别抢购后，宴席、送礼买酒比以前更划算吗？", "更划算了。官方飞天价格反而从1499元提到了1639元，省下的只是找黄牛加的钱"],
+    ["鬼塚虎四年涨了近八成：同一双鞋，国内标价 1050，日本退税六百多", "同款标价八九百，2022 经典款标价 590 元"],
+    ["双11的CPB作业藏了一半：400多是运气，537才是真相", "官方价540元，全网作业帖喊出400多到手"],
+  ];
+  for (const [title, summary] of editorial) {
+    const out = enforceFreebieEvidence("freebie", "free", title, "tech", { summary, sourceId: "rss-smzdm" });
+    assert.equal(out.kind, "info", title);
+    assert.equal(out.obtain, null, title);
+  }
+  // 同样落在中性分类、但真有东西可领的必须保住
+  for (const [title, summary] of [
+    ["上海12月2日领160元活动", "现场领取，凭手机号"],
+    ["多地免费300mb 一天 esim 大陆可用 无aff", ""],
+    ["腾讯也要搞众测了，简单注册签约直接100元到账", ""],
+  ] as [string, string][]) {
+    assert.equal(enforceFreebieEvidence("freebie", "conditional", title, "tech", { summary, sourceId: "linuxdo-welfare" }).kind, "freebie", title);
+  }
+  // 纯免费源的标题常常省略「免费」字样，不能被这道闸误杀
+  assert.equal(enforceFreebieEvidence("freebie", "free", "Contractor: The Clean Up Part II", "game", { sourceId: "rss-isthereanydeal" }).kind, "freebie");
+  // 带兑换码就是有领取对象
+  assert.equal(enforceFreebieEvidence("freebie", "free", "某活动 9.9 元礼包 价格说明", "tech", { codes: ["ABC-123"], sourceId: "rss-smzdm" }).kind, "freebie");
+  // 非中性分类不受影响（影音会员等渠道文仍按原口径）
+  assert.equal(enforceFreebieEvidence("freebie", "free", "某会员 30 元降到 9 元，值得买吗", "media", { summary: "价格 9 元" }).kind, "freebie");
+});
+
+test("修复/重分类走同一道白嫖证据闸：已入库的测评文能被修掉", () => {
+  const id = seed("rss-smzdm", "editorial-freebie", "茅台告别抢购后，宴席、送礼买酒比以前更划算吗？", "tech", "freebie");
+  run("UPDATE items SET ai=?, ai_keep=1, obtain='free' WHERE id=?", JSON.stringify({ keep: true, kind: "freebie", category: "tech", obtain: "free", reason: "茅台日常渠道购买更划算分析" }), id);
+  const dry = reclassifyStoredItems("all", { dryRun: true, sourceId: "rss-smzdm" });
+  assert.ok(dry.samples.some((s) => s.id === id && s.toKind === "info"));
+  assert.equal(get<{ kind: string }>("SELECT kind FROM items WHERE id=?", id)!.kind, "freebie");
+  reclassifyStoredItems("all", { sourceId: "rss-smzdm" });
+  // kind 必须离开 freebie（真福利频道只收 kind=freebie，obtain 单独存在不会漏进来）
+  assert.equal(get<{ kind: string }>("SELECT kind FROM items WHERE id=?", id)!.kind, "info");
 });
