@@ -86,7 +86,7 @@ async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy
     "-H",
     "accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.9,*/*;q=0.8",
     "-w",
-    "\n__STATUS__%{http_code}\n__CT__%{content_type}\n__URL__%{url_effective}",
+    "\n__STATUS__%{http_code}\n__CT__%{content_type}\n__ETAG__%header{etag}\n__LM__%header{last-modified}\n__URL__%{url_effective}",
   ];
   if (opts.redirect !== "manual") args.push("-L", "--max-redirs", "5");
   if (proxy) args.push("-x", proxy);
@@ -109,17 +109,21 @@ async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy
       }
       const out = Buffer.concat(chunks);
       const text = out.toString("utf8");
-      const m = /\n__STATUS__(\d+)\n__CT__([^\n]*)\n__URL__(.*)$/s.exec(text);
+      const m = /\n__STATUS__(\d+)\n__CT__([^\n]*)\n__ETAG__([^\n]*)\n__LM__([^\n]*)\n__URL__(.*)$/s.exec(text);
       if (!m) {
         reject(new Error("curl 输出无法解析"));
         return;
       }
       const bodyBytes = out.subarray(0, out.length - Buffer.byteLength(m[0], "utf8"));
       const contentType = m[2] ?? "";
+      // E5：curl 路径也带回 etag / last-modified，供 RSS 条件请求用
+      const headers = new Headers(contentType ? { "content-type": contentType } : {});
+      if (m[3]) headers.set("etag", m[3]);
+      if (m[4]) headers.set("last-modified", m[4]);
       resolve({
         status: Number(m[1]),
-        url: m[3] || url,
-        headers: new Headers(contentType ? { "content-type": contentType } : {}),
+        url: m[5] || url,
+        headers,
         bytes: bodyBytes,
         body: decode(bodyBytes, contentType),
         contentType,
