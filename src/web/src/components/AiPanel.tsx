@@ -235,7 +235,21 @@ export function AiPanel({
       });
       if (r.ok) {
         const j = (await r.json()) as AiPayload;
-        setForm({ ...j.settings });
+        const saved = j.settings as unknown as Record<string, unknown>;
+        setForm((prev) => {
+          if (!prev) return { ...j.settings };
+          const next: Record<string, unknown> = { ...prev };
+          // 只回写本次 patch 提交的字段，其余未保存草稿（端点/模型/Key/提示词）保持用户输入。
+          // 之前整块 setForm({ ...j.settings }) 会把草稿冲成服务端旧值——点任意一个自动保存开关就丢 Key。
+          for (const key of Object.keys(patch)) {
+            if (key in saved) next[key] = saved[key];
+          }
+          // 本次提交的明文 Key 已经落库：清空输入框，让 keyHint 占位提示接手
+          if (typeof patch.apiKey === "string" && patch.apiKey.trim() && !patch.apiKey.startsWith("••••")) {
+            next.apiKey = "";
+          }
+          return next as unknown as AiSettings;
+        });
         reload();
         onNotify?.(toastText);
       } else {
@@ -266,7 +280,8 @@ export function AiPanel({
         body: JSON.stringify(draft),
       });
       setTest((await r.json()) as TestResult);
-      reload();
+      // 不再 reload()：重新拉 /api/ai 只会把未保存的草稿覆盖成服务端旧值；
+      // 测试不需要改配置，统计由 /api/ai/live 轮询（活动时 750ms）自行刷新。
     } finally {
       setTesting(false);
     }
