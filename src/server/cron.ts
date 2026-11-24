@@ -34,18 +34,36 @@ export function matchField(field: string, value: number, min: number, max: numbe
 }
 
 
+/** 失败退避上限：连续失败 6 次（×64）封顶，间隔再长也不超过 24 小时（E1）。 */
+export const MAX_BACKOFF_STEPS = 6;
+export const MAX_BACKOFF_SEC = 86_400;
+
+/**
+ * 失败退避后的有效间隔：连续失败 n 次 → interval × 2^n，上限 24 小时；成功一次清零。
+ * 例：Reddit 源 7200 秒、连败 6 次后 24 小时才重试一次，不再空转打爆对方 429。
+ */
+export function effectiveIntervalSec(intervalSec: number, consecutiveFailures: number): number {
+  const n = Math.max(0, Math.min(MAX_BACKOFF_STEPS, Math.floor(consecutiveFailures)));
+  return Math.min(intervalSec * 2 ** n, MAX_BACKOFF_SEC);
+}
+
 export function listDueSourceIds(): string[] {
-  const due = all<{ id: string; kind: string; interval_sec: number; last_run_at: string | null }>(
-    `SELECT id, kind, interval_sec, last_run_at FROM sources
+  const rows = all<{ id: string; kind: string; interval_sec: number; last_run_at: string | null; consecutive_failures: number }>(
+    `SELECT id, kind, interval_sec, last_run_at, COALESCE(consecutive_failures, 0) AS consecutive_failures FROM sources
       WHERE enabled = 1
-        AND (last_run_at IS NULL OR datetime(last_run_at, '+' || interval_sec || ' seconds') <= datetime('now'))
       ORDER BY last_run_at IS NOT NULL, last_run_at ASC`,
   );
+  const now = Date.now();
   const filter = config.enabledSources;
-  return due
+  return rows
     .filter((s) => {
       if (filter.length && !filter.includes(s.id)) return false;
       if (s.kind === "ingest" && !hasCookieConfiguredForSource(s.id)) return false;
+      // 到点判断含失败退避：上次跑完 + 有效间隔（基础间隔 × 2^连败次数，上限 24 小时）才到期
+      if (s.last_run_at) {
+        const nextAt = Date.parse(s.last_run_at) + effectiveIntervalSec(s.interval_sec, s.consecutive_failures) * 1000;
+        if (Number.isNaN(nextAt) || nextAt > now) return false;
+      }
       return true;
     })
     .map((s) => s.id);
@@ -73,6 +91,8 @@ export function startIntervalScheduler(task: {
         } catch (err) {
           log(`[cron] ${id} 失败: ${err instanceof Error ? err.message : String(err)}`);
         }
+        // 生产调度与 CLI 共用源间间隔，避免连续请求被上游 429（E2）
+        if (config.sourceGapMs > 0) await new Promise((r) => setTimeout(r, config.sourceGapMs));
       }
       // Epic 自动领取：内部自带「间隔到了才跑」的闸门与并发锁，不阻塞采集主循环
     } catch (err) {

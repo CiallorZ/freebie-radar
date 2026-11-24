@@ -30,6 +30,28 @@ const parser = new XMLParser({
   processEntities: false,
 });
 
+/** E5 条件请求：每个 feed 的 ETag / Last-Modified，存在 sources.cursor（JSON）里 */
+type FeedValidators = { etag?: string; lastModified?: string };
+
+function parseValidators(cursor: string | null): Record<string, FeedValidators> {
+  if (!cursor) return {};
+  try {
+    const parsed = JSON.parse(cursor) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, FeedValidators> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!v || typeof v !== "object") continue;
+      const o = v as Record<string, unknown>;
+      const etag = typeof o.etag === "string" ? o.etag.slice(0, 256) : undefined;
+      const lastModified = typeof o.lastModified === "string" ? o.lastModified.slice(0, 128) : undefined;
+      if (etag || lastModified) out[k] = { ...(etag ? { etag } : {}), ...(lastModified ? { lastModified } : {}) };
+    }
+    return out;
+  } catch {
+    return {}; // 老 cursor（翻页 token 等）直接忽略
+  }
+}
+
 function asArray<T>(v: T | T[] | undefined): T[] {
   if (v === undefined || v === null) return [];
   return Array.isArray(v) ? v : [v];
@@ -139,6 +161,8 @@ export const rssCollector: Collector = {
     const items: RawItem[] = [];
     const problems: string[] = [];
     let okFeeds = 0;
+    const validators = parseValidators(ctx.cursor);
+    const nextValidators: Record<string, FeedValidators> = { ...validators };
 
     for (const feed of feeds) {
       const limit = Math.min(feed.limit ?? 30, ctx.maxItems);
@@ -150,8 +174,28 @@ export const rssCollector: Collector = {
           if (res.status !== 200) throw new Error("HTTP " + res.status);
           body = res.body;
         } else {
-          const res = await ctx.http.text(feed.url);
+          const v = validators[feed.id];
+          const headers: Record<string, string> = {};
+          if (v?.etag) headers["if-none-match"] = v.etag;
+          if (v?.lastModified) headers["if-modified-since"] = v.lastModified;
+          const res = await ctx.http.text(feed.url, { headers });
+          if (res.status === 304) {
+            // 内容没变：跳过解析入库，本轮算成功
+            ctx.log(feed.id + " not-modified");
+            okFeeds += 1;
+            continue;
+          }
           if (res.status !== 200) throw new Error("HTTP " + res.status);
+          const etag = res.headers?.get("etag") ?? undefined;
+          const lastModified = res.headers?.get("last-modified") ?? undefined;
+          if (etag || lastModified) {
+            nextValidators[feed.id] = {
+              ...(etag ? { etag: etag.slice(0, 256) } : {}),
+              ...(lastModified ? { lastModified: lastModified.slice(0, 128) } : {}),
+            };
+          } else {
+            delete nextValidators[feed.id];
+          }
           body = res.body;
         }
 
@@ -227,9 +271,10 @@ export const rssCollector: Collector = {
 
     if (!okFeeds && problems.length) throw new Error("全部 feed 失败: " + problems.join("; "));
 
+    const cursor = Object.keys(nextValidators).length ? JSON.stringify(nextValidators) : null;
     return {
       items: items.slice(0, ctx.maxItems),
-      cursor: null,
+      cursor,
       degraded: problems.length ? problems.join("; ") : null,
     };
   },
