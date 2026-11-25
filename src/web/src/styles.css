@@ -40,7 +40,7 @@
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
   /* 实心按钮/滑块/遮罩：与「文字深浅」解耦，深色主题下按钮翻成靛蓝，
-     白字与白色滑块在两种主题都成立，避免 bg-ink-950 + text-white 组合在深色下白底白字 */
+     白字与白色滑块在两种主题都成立。实心块一律用 bg-solid，写 bg-ink-950 会在深色主题下翻成浅底白字 */
   --color-solid: #111318;
   --color-solid-hover: #272b36;
   --color-solid-dark: #090a0d;

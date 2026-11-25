@@ -64,6 +64,16 @@ export const config = {
   aiApiKey: str("AI_API_KEY"),
   aiModel: str("AI_MODEL"),
   aiMaxItems: num("AI_MAX_ITEMS", 60),
+  // 云端提示词：留空即关闭。指向 GitHub raw 时，改提示词不用发版
+  promptUrl: str("PROMPT_URL"),
+  promptExtraUrl: str("PROMPT_EXTRA_URL"),
+  // 0 = 只在启动时同步一次
+  promptSyncMinutes: (() => {
+    const raw = str("PROMPT_SYNC_MINUTES");
+    if (!raw) return 10;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 10;
+  })(),
 
   ingestToken: str("INGEST_TOKEN"),
   /** VPS 按需无头 Cookie 执行器地址（仅内网/网桥监听，平时 0 MB 浏览器内存） */

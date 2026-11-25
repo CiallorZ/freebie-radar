@@ -1,4 +1,5 @@
 import { getAiSettings, reviewItems, type AiVerdict } from "./ai-settings.ts";
+import { normalizeAiTags } from "./ai-settings.ts";
 import { dedupeKeptItemsWithAi } from "./ai-dedup.ts";
 import { demoteEditorialGoods, demoteOfflineCategory, enforceFreebieEvidence, FREEBIE_ONLY_SOURCES, isCategory, resolveKind, type ContentKind } from "./index.ts";
 import { calibrateScoreByObtain } from "./alias.ts";
@@ -8,6 +9,7 @@ import { finishAiJob, recordAiBatch, startAiJob } from "./ai-telemetry.ts";
 import { getSourceHints, applyManualClassification } from "../source-settings.ts";
 import { categoryForSource } from "../../shared/source-classification.ts";
 import { isSharedResource } from "./evidence.ts";
+import { readEvidence, shouldQueueForReview } from "./classify.ts";
 import { extractPrice } from "./pricing.ts";
 
 const VALID_OBTAIN = new Set(["free", "conditional", "lottery", "trial", "promo", "paid"]);
@@ -101,8 +103,10 @@ function applyVerdictToItem(itemId: number, verdict: AiVerdict): AppliedVerdict 
       codes: string | null;
       content: string | null;
       url: string;
+      tags: string | null;
+      status: string;
     }>(
-      "SELECT score, base_score, ai_keep, obtain, category, title, summary, source_id, is_free, price, published_at, codes, content, url FROM items WHERE id = ?",
+      "SELECT score, base_score, ai_keep, obtain, category, title, summary, source_id, is_free, price, published_at, codes, content, url, tags, status FROM items WHERE id = ?",
       itemId,
     );
     if (!cur) return null;
@@ -146,6 +150,31 @@ function applyVerdictToItem(itemId: number, verdict: AiVerdict): AppliedVerdict 
     ), hints);
     const { kind: effectiveKind, category: effectiveCategory } = applyManualClassification(itemId, autoCategory, finalKind);
     const effectiveKeep = finalKind === "noise" ? false : verdict.keep;
+    // AI 说是福利、证据里却没有任何可领取对象（领取动作/赠送/兑换码/权益/项目）时不上公开站：
+    // 这正是「讨论帖判 freebie」那批幻觉的特征。进 review 等人工看一眼，不直接丢也不直接发。
+    // 已有人工分类的条目以人工为准，不进队列。
+    const evidence = readEvidence({
+      title: cur.title,
+      summary: cur.summary ?? "",
+      url: cur.url,
+      sourceId: cur.source_id,
+      category: effectiveCategory,
+      obtain: finalObtain,
+      isFree: priceInfo.isFree,
+      price: priceInfo.price,
+      codeCount: parseCodes(cur.codes).length,
+    });
+    const hasManualOverride = Boolean(get("SELECT 1 FROM item_classification_overrides WHERE item_id = ?", itemId));
+    const needsReview = shouldQueueForReview({
+      keep: effectiveKeep,
+      kind: effectiveKind,
+      status: cur.status,
+      hasManualOverride,
+      evidence,
+    });
+    let nextStatus = cur.status;
+    if (cur.status === "active" && needsReview) nextStatus = "review";
+    else if (cur.status === "review" && !needsReview) nextStatus = effectiveKeep ? "active" : "ignored";
     const keep = effectiveKeep ? 1 : 0;
     const nextScore = cur
       ? calibrateScoreByObtain(
@@ -164,6 +193,14 @@ codes: parseCodes(cur.codes),
           },
         )
       : 0;
+    // AI 语义标签放前面，历史关键词标签保留在后，去重后最多 8 个
+    let curTags: string[] = [];
+    try {
+      curTags = JSON.parse(cur.tags ?? "[]") as string[];
+    } catch {
+      curTags = [];
+    }
+    const mergedTags = JSON.stringify([...new Set([...normalizeAiTags(verdict.tags), ...(Array.isArray(curTags) ? curTags : [])])].slice(0, 8));
     run(
       `UPDATE items
           SET ai = ?,
@@ -175,6 +212,8 @@ codes: parseCodes(cur.codes),
               score = ?,
               price = ?,
               is_free = ?,
+              tags = ?,
+              status = ?,
               ai_reviewed_at = ?
         WHERE id = ?`,
       JSON.stringify({ ...verdict, keep: effectiveKeep, kind: finalKind, category: autoCategory, obtain: finalObtain }),
@@ -186,6 +225,8 @@ codes: parseCodes(cur.codes),
       nextScore,
       priceInfo.price,
       priceInfo.isFree ? 1 : 0,
+      mergedTags,
+      nextStatus,
       new Date().toISOString(),
       itemId,
     );

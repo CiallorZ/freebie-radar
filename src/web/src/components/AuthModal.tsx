@@ -148,7 +148,7 @@ export function AuthModal({
                 type="button"
                 onClick={() => void submitInvite()}
                 disabled={busy === "invite" || !invite.trim()}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-ink-950 px-3 py-2 text-[13px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-solid px-3 py-2 text-[13px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
               >
                 {busy === "invite" ? <Loader2 size={14} className="animate-spin" /> : <Ticket size={14} />}
                 {t("验证并完成注册")}
@@ -178,7 +178,7 @@ export function AuthModal({
                     type="button"
                     onClick={() => startLogin(invite)}
                     disabled={!boot.oauthConfigured}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-ink-950 px-3 py-2 text-[13px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-solid px-3 py-2 text-[13px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
                   >
                     <LogIn size={14} />
                     {t("跳转 LINUX DO 授权")}

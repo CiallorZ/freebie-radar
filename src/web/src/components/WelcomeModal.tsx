@@ -85,7 +85,7 @@ export function WelcomeModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-ink-950 px-3.5 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover"
+            className="rounded-lg bg-solid px-3.5 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover"
           >
             {t("开始使用")}
           </button>

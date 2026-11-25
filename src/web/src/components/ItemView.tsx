@@ -313,29 +313,6 @@ export function CompactRow({
           ))}
         </div>
         <div className="row-actions ml-auto flex shrink-0 items-center gap-0.5 sm:ml-1">
-          <a
-            href={item.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            onClick={() => {
-              if (!item.read) onPatch(item.id, { read: true });
-            }}
-            className="rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-950 sm:p-1.5"
-            title={t("新标签打开原帖")}
-          >
-            <ArrowUpRight size={15} />
-          </a>
-          <button
-            type="button"
-            onClick={() => onPatch(item.id, { starred: !item.starred })}
-            className={
-              "rounded-md p-2 transition-colors hover:bg-ink-100 sm:p-1.5 " +
-              (item.starred ? "text-code" : "text-ink-400 hover:text-ink-800")
-            }
-            title={item.starred ? t("取消收藏") : t("收藏")}
-          >
-            <Star size={14} fill={item.starred ? "currentColor" : "none"} />
-          </button>
           <span className="flex items-center gap-0.5 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:focus-within:opacity-100">
           <button
             type="button"
@@ -354,6 +331,18 @@ export function CompactRow({
             {item.status === "ignored" ? <Eye size={14} /> : <EyeOff size={14} />}
           </button>
           </span>
+          <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            onClick={() => {
+              if (!item.read) onPatch(item.id, { read: true });
+            }}
+            className="rounded-md p-2 text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-950 sm:p-1.5"
+            title={t("新标签打开原帖")}
+          >
+            <ArrowUpRight size={15} />
+          </a>
         </div>
         <span className="hidden w-[72px] shrink-0 whitespace-nowrap text-right font-mono text-[12px] tabular-nums text-ink-400 sm:inline-block">
           <RelativeTime iso={item.published_at ?? item.first_seen_at} />
@@ -685,7 +674,7 @@ export function ItemDetailDrawer({
   }, [onClose, hasPrev, hasNext, onPrev, onNext]);
 
   return (
-    <div className="backdrop-enter fixed inset-0 z-50 flex justify-end bg-ink-950/25 backdrop-blur-[1px]" onClick={onClose}>
+    <div className="backdrop-enter fixed inset-0 z-50 flex justify-end bg-overlay backdrop-blur-[1px]" onClick={onClose}>
       <aside
         ref={dialogRef}
         role="dialog"
@@ -928,7 +917,7 @@ export function QuickBlockModal({
 
   return (
     <div
-      className="backdrop-enter fixed inset-0 z-50 flex items-end justify-center bg-ink-950/30 backdrop-blur-[1px] sm:items-center sm:p-4"
+      className="backdrop-enter fixed inset-0 z-50 flex items-end justify-center bg-overlay backdrop-blur-[1px] sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div

@@ -20,7 +20,7 @@ export const DEFAULT_FEED_STATE: FeedState = {
   preset: "verified", search: "", source: "", categories: [], lang: "all", sort: "newest",
   range: "auto", priceCap: "auto", minScore: "all", obtain: "auto", kindFilter: "auto", unreadOnly: false,
 };
-const PRESETS = new Set(["verified", "offline", "pan", "deal", "opensource", "news", "info", "codes", "urgent", "starred", "hidden", "all"]);
+const PRESETS = new Set(["verified", "offline", "pan", "deal", "opensource", "news", "info", "codes", "urgent", "starred", "hidden", "review", "all"]);
 const FIELDS = { preset: "preset", search: "q", source: "source", lang: "filterLang", sort: "sort", range: "range", priceCap: "price", minScore: "score", obtain: "obtain", kindFilter: "kind" } as const;
 const DAYS: Record<string, number> = { "1d": 1, "3d": 3, "7d": 7, "30d": 30 };
 const pick = (value: string | null, allowed: readonly string[], fallback: string) => value && allowed.includes(value) ? value : fallback;

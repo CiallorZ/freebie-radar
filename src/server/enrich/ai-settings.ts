@@ -21,6 +21,8 @@ export type AiVerdict = {
   obtain?: ObtainMode;
   /** 1-5 分质量评估：5=高价值必看/必抢，4=明确好内容，3=普通，2=鸡肋，1=噪音 */
   quality?: number;
+  /** 检索用短标签（品牌/平台/品类），不参与频道路由；缺省表示模型没给 */
+  tags?: string[];
 };
 
 export type AiSourceMode = "all" | "exclude" | "only";
@@ -78,6 +80,8 @@ const DEFAULT_PROMPT = [
   "判 keep=true 的五类有效内容（同时标清 kind）：",
   "1. freebie（白嫖福利）：限免游戏/正版软件授权、兑换码/CDK/公益额度/送 Token、免费云主机/域名/GPU/算力/学生包、可照做领到手的白嫖攻略、OpenRouter 新上线 :free 免费模型。",
   "   反例：测评、使用记录、使用感受、选购科普、榜单推荐、横评、抄作业清单都不是 freebie（没有可领取的对象），应标 kind=info；只有真能领到/免费拿到的东西才是 freebie。",
+  "   反例补：讨论/抱怨/库存播报（「xx 死绝了吗」「xx 都没货了」「还有吗」「怎么过 xx 认证」）不是 freebie；标题没有链接、活动页或 App 内路径时不要判福利。reason 只能引自原文，原文没写的领取路径一律不许编。",
+  "   分类补：免费领实体物品（纪念章/周边/实体书/样品/礼盒/到店赠品）一律 category=offline，不要判 other/goods；绿色版/破解包/免安装版归 category=software，不是 opensource。",
   "2. deal（特价好价/拼车/出鸡）：明确的高性价比付费促销、史低折扣（如黑五/周年庆特价 VPS、年付小鸡、Steam 史低、正版软件买断大促），以及明确标价发车的合规拼车合租（如 ChatGPT/Claude/Netflix 家庭组车位）或明确标价出鸡/转让帖。不要因为需要付钱就拦掉好价与发车。",
   "   硬约束：标题出现「N出 / 溢价N出 / 出 / 收 / 转让 / 过户 / 出号 / 车位 / 合租 / 拼团 / 独享车」等交易意图词，且带价格或付费方式时，kind 必须是 deal，不得判 info（「50出zouter」= 50 元转让 zouter，是 deal 不是资讯）。",
   "3. opensource（开源项目）：必须有明确的 GitHub/GitLab 仓库、源码或可部署的自托管工具、MCP/Agent/Docker 项目发布或推荐。纯科技新闻（无开源仓库/源码发布）不得标为 opensource。",
@@ -176,6 +180,24 @@ function normalizeSettings(raw: Partial<AiSettings>, base: AiSettings): AiSettin
     aiDedupEnabled: typeof raw.aiDedupEnabled === "boolean" ? raw.aiDedupEnabled : base.aiDedupEnabled,
     aiDedupWindowHours: numOr(raw.aiDedupWindowHours, base.aiDedupWindowHours, 6, 168),
   };
+}
+
+/** AI 标签只做检索辅助：非法、超长、重复一律丢掉，绝不影响这条内容的分类判定。 */
+export const AI_TAG_MAX = 4;
+export const AI_TAG_MAX_LEN = 16;
+
+export function normalizeAiTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string") continue;
+    const tag = item.trim().replace(/^#+/, "").replace(/\s+/g, " ");
+    if (!tag || tag.length > AI_TAG_MAX_LEN) continue;
+    if (out.includes(tag)) continue;
+    out.push(tag);
+    if (out.length >= AI_TAG_MAX) break;
+  }
+  return out;
 }
 
 export function getAiSettings(): AiSettings {
@@ -280,7 +302,10 @@ export function publicAiSettings(s = getAiSettings()) {
 }
 
 function buildSystemPrompt(s: AiSettings): string {
-  const parts: string[] = [s.systemPrompt.trim() || DEFAULT_PROMPT];
+  const custom = s.systemPrompt.trim();
+  const parts: string[] = [custom || DEFAULT_PROMPT];
+  // 自定义/云端 system prompt 也要补分类清单，否则模型不知道 category 能取哪些值
+  if (custom) parts.push("", CATEGORY_PROMPT_LINE, CATEGORY_DESC_LINE);
   if (s.extraPrompt.trim()) {
     parts.push("", "补充审核规则（务必优先遵守）：", s.extraPrompt.trim());
   }
@@ -342,6 +367,7 @@ async function callOnce(
     if (!Array.isArray(arr) || arr.length !== payload.length) throw new Error("AI 返回条数与送审条数不匹配");
     const expectedIndexes = new Set(payload.map((item) => item.index));
     const map = new Map<number, AiVerdict>();
+    let invalidCount = 0;
     // 不信任 JSON 的类型和索引：字符串 false 会被当成通过，串批索引会覆盖其他资源。
     for (const raw of arr) {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("AI 结论必须是对象");
@@ -349,14 +375,25 @@ async function callOnce(
       if (typeof v.index !== "number" || !Number.isInteger(v.index) || !expectedIndexes.has(v.index) || map.has(v.index)) {
         throw new Error("AI 结论索引缺失、重复或不属于当前批次");
       }
-      if (typeof v.keep !== "boolean" || !isCategory(v.category) || typeof v.reason !== "string" ||
-          (v.kind !== undefined && !isContentKind(v.kind)) ||
-          (v.obtain !== undefined && !isObtainMode(v.obtain)) ||
-          (v.quality !== undefined && (typeof v.quality !== "number" || !Number.isFinite(v.quality) || v.quality < 1 || v.quality > 5))) {
-        throw new Error("AI 结论字段无效（keep/category/reason/kind/obtain/quality）");
+      // 单条字段非法只丢这一条：整批重试会把另外 19 条正确结论一起作废，
+      // 而 category/kind 越界多半来自个别幻觉（模型给出枚举外的分类）。
+      // 索引错位仍然是整批失败——那会把结论张冠李戴到别的资源上。
+      const invalid =
+        typeof v.keep !== "boolean" || !isCategory(v.category) || typeof v.reason !== "string" ||
+        (v.kind !== undefined && !isContentKind(v.kind)) ||
+        (v.obtain !== undefined && !isObtainMode(v.obtain)) ||
+        (v.quality !== undefined && (typeof v.quality !== "number" || !Number.isFinite(v.quality) || v.quality < 1 || v.quality > 5));
+      if (invalid) {
+        invalidCount += 1;
+        console.warn(`${tag} 丢弃无效结论 index=${v.index} category=${String(v.category)}`);
+        continue;
       }
+      // tags 是辅助字段：非法就清空，不因为它把一条正确结论丢掉
+      (v as AiVerdict).tags = normalizeAiTags(v.tags);
       map.set(v.index, v as AiVerdict);
     }
+    // 整批都没给出合法结论时仍当作失败，避免把「模型跑偏」记成「全部未审通过」
+    if (!map.size && payload.length > 0) throw new Error("AI 结论全部无效（keep/category/reason/kind/obtain/quality）");
     return { map, ttfbMs: ttfb };
   } finally {
     clearTimeout(timer);

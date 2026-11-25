@@ -897,7 +897,7 @@ export function PushPanel({
                             name: t("新闻资讯早报"),
                             enabled: true,
                             kinds: ["info"],
-                            categories: ["headline", "finance", "ai", "dev", "opensource", "security", "hardware", "news"],
+                            categories: ["finance", "ai", "dev", "opensource", "security", "hardware", "news"],
                             obtainModes: [],
                             keywords: [],
                             maxPrice: null,

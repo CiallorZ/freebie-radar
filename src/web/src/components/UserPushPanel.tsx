@@ -62,7 +62,7 @@ const REJECTION_LABEL: Record<string, string> = {
 function Toast2({ msg }: { msg: string | null }) {
   if (!msg) return null;
   return (
-    <div role="status" aria-live="polite" className="toast-enter fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-[12px] font-medium text-on-solid">
+    <div role="status" aria-live="polite" className="toast-enter fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-ink-700 bg-solid px-3.5 py-2 text-[12px] font-medium text-on-solid">
       {msg}
     </div>
   );
@@ -304,7 +304,7 @@ export function UserPushPanel({ boot }: { boot: Bootstrap }) {
                 if (await save({ webhookUrl: webhookInput.trim(), webhookSecret: secretInput.trim() })) {
                   setWebhookInput(webhookInput.trim()); setSecretInput(secretInput.trim()); notify(t("Webhook 凭据已保存"));
                 }
-              }} className="rounded-lg bg-ink-950 px-3 py-1.5 text-[12px] font-medium text-on-solid">{t("保存 Webhook")}</button>
+              }} className="rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid">{t("保存 Webhook")}</button>
             </>
           ) : null}
           {!viaWebhook && <>
@@ -339,7 +339,7 @@ export function UserPushPanel({ boot }: { boot: Bootstrap }) {
                 }
               }}
               disabled={busy !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-3 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
             >
               {busy === "token" ? <Loader2 size={12} className="animate-spin" /> : null}
               {t("保存 Token")}
@@ -622,7 +622,7 @@ export function UserPushPanel({ boot }: { boot: Bootstrap }) {
               }
             }}
             disabled={busy !== null || credentialsDirty}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-3.5 py-2 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3.5 py-2 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-50"
           >
             {busy === "preview" ? <Loader2 size={13} className="animate-spin" /> : <Eye size={13} />} {t("试算")}
           </button>

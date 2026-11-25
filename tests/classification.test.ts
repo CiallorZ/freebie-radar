@@ -88,13 +88,13 @@ test("固定分类在重采与 AI 审核后仍生效，AI 原判新闻也按证�
   run("UPDATE sources SET config=? WHERE id='linuxdo-resource'", '{"categoryId":14,"fixedCategory":"pan"}');
   ingestItems("linuxdo-resource", [{ externalId: "new-share", url: "https://example.com/new-share", title: "领取 AI 课程软件资料", publishedAt: now }]);
   const shareId = get<{ id: number }>("SELECT id FROM items WHERE external_id='new-share'")!.id;
-  const flightId = seed("rss-smzdm", "flight-ai", flight, "world", "deal");
+  const flightId = seed("rss-smzdm", "flight-ai", flight, "news", "deal");
   const prompts: string[] = [];
   globalThis.fetch = (async (_url, init) => {
     const body = JSON.parse(String(init?.body)) as { messages: { content: string }[] };
     prompts.push(body.messages[0]!.content);
     const payload = JSON.parse(body.messages[1]!.content) as { index: number; title: string }[];
-    const verdicts = payload.map((p) => ({ index: p.index, keep: true, kind: p.title === flight ? "news" : "freebie", category: p.title === flight ? "world" : "ai", obtain: "free", quality: 4, reason: "模拟模型输出" }));
+    const verdicts = payload.map((p) => ({ index: p.index, keep: true, kind: p.title === flight ? "news" : "freebie", category: p.title === flight ? "news" : "ai", obtain: "free", quality: 4, reason: "模拟模型输出" }));
     return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(verdicts) } }] }), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   saveAiSettings({ enabled: true, baseUrl: "https://example.invalid/v1", model: "fake-model", systemPrompt: "自定义审核提示词", aiDedupEnabled: false });
@@ -142,8 +142,8 @@ test("RSS 多地址各用自身分类提示；包含/排除原站栏目与标题
 });
 
 test("分类检查 dry-run 不写库，管理端可试算/开关/修复误分且不发送任何消息", async () => {
-  const id = seed("rss-smzdm", "flight-legacy", flight, "world", "deal");
-  run("UPDATE items SET ai=? WHERE id=?", JSON.stringify({ kind: "deal", category: "world", keep: true }), id);
+  const id = seed("rss-smzdm", "flight-legacy", flight, "news", "deal");
+  run("UPDATE items SET ai=? WHERE id=?", JSON.stringify({ kind: "deal", category: "news", keep: true }), id);
   const audit = reclassifyStoredItems("all", { dryRun: true, sourceId: "rss-smzdm" });
   assert.ok(audit.samples.some((s) => s.id === id && s.toKind === "info"));
   assert.equal(get<{ kind: string }>("SELECT kind FROM items WHERE id=?", id)!.kind, "deal");

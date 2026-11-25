@@ -905,13 +905,13 @@ test("新闻资讯扩展（时政要闻/财经商业放行）与全局屏蔽词�
   const { saveAiSettings } = await import("../src/server/enrich/ai-settings.ts");
   const now = new Date().toISOString();
 
-  // 时政要闻与财经动态不再被 NOISE_TITLE 入口误杀，自动落位 headline / finance 且 kind = info
+  // 时政要闻与财经动态不再被 NOISE_TITLE 入口误杀，自动落位 news / finance 且 kind = info
   const headline = enrichItem(
     { externalId: "hn1", url: "https://ex.com/hn1", title: "国务院办公厅发布人工智能产业监管新规政策", publishedAt: now },
     "cctv-news",
   )!;
   assert.equal(NOISE_TITLE.test(headline.title), false);
-  assert.equal(headline.category, "headline");
+  assert.equal(headline.category, "news");
   assert.equal(headline.kind, "news");
 
   const finance = enrichItem(
@@ -972,7 +972,7 @@ test("cctvCollector 与新闻/资讯/黑五VPS分类分离", async () => {
   };
   const collected = await cctvCollector.collect({
     sourceId: "cctv-news",
-    config: { channels: [{ channel: "news", cb: "news", categoryHint: "headline", limit: 10 }] },
+    config: { channels: [{ channel: "news", cb: "news", categoryHint: "news", limit: 10 }] },
     cursor: null,
     maxItems: 10,
     http: fakeHttp as never,
@@ -981,7 +981,7 @@ test("cctvCollector 与新闻/资讯/黑五VPS分类分离", async () => {
   assert.equal(collected.items.length, 1);
   const enrichedNews = enrichItem(collected.items[0]!, "cctv-news")!;
   assert.equal(enrichedNews.kind, "news");
-  assert.equal(enrichedNews.category, "headline");
+  assert.equal(enrichedNews.category, "news");
 
   const stockInfo = enrichItem(
     { externalId: "stk1", url: "https://ex.com/stk1", title: "A股半导体板块午后拉升，ETF 成交额破百亿", publishedAt: new Date().toISOString() },
@@ -1002,15 +1002,15 @@ test("cctvCollector 与新闻/资讯/黑五VPS分类分离", async () => {
 test("重要新闻严格限定于权威新闻源，禁止什么值得买/社区源进入 kind=news", async () => {
   const { resolveKind } = await import("../src/server/enrich/kind.ts");
   assert.equal(
-    resolveKind("news", true, { title: "胖东来称有问题会负责，这次赔付规则是什么？", sourceId: "rss-smzdm", category: "headline", isFree: false }),
+    resolveKind("news", true, { title: "胖东来称有问题会负责，这次赔付规则是什么？", sourceId: "rss-smzdm", category: "news", isFree: false }),
     "info",
   );
   assert.equal(
-    resolveKind("news", true, { title: "2026 商保创新药目录扩容至 28 种", sourceId: "rss-ithome", category: "headline", isFree: false }),
+    resolveKind("news", true, { title: "2026 商保创新药目录扩容至 28 种", sourceId: "rss-ithome", category: "news", isFree: false }),
     "info",
   );
   assert.equal(
-    resolveKind("news", true, { title: "国务院发布稳外贸若干政策措施", sourceId: "rss-chinanews-china", category: "headline", isFree: false }),
+    resolveKind("news", true, { title: "国务院发布稳外贸若干政策措施", sourceId: "rss-chinanews-china", category: "news", isFree: false }),
     "news",
   );
 });
@@ -1026,12 +1026,12 @@ test("数据源运维支持编辑名称/config/用途频道与删除自定义源
     url: "https://example.com/news.xml",
     intervalSec: 900,
     kindHint: "news",
-    categoryHint: "headline",
+    categoryHint: "news",
   });
 
   const hints = getSourceHints(customId);
   assert.equal(hints.kindHint, "news");
-  assert.equal(hints.categoryHint, "headline");
+  assert.equal(hints.categoryHint, "news");
 
   const enriched = enrichItem(
     { externalId: "cn1", url: "https://example.com/a1", title: "全国多地推进重大水利与基础设施工程建设", publishedAt: new Date().toISOString() },
@@ -1039,7 +1039,7 @@ test("数据源运维支持编辑名称/config/用途频道与删除自定义源
     hints,
   )!;
   assert.equal(enriched.kind, "news");
-  assert.equal(enriched.category, "headline");
+  assert.equal(enriched.category, "news");
 
   // 非法 RSS URL 应被 PATCH 拒绝
   const badPatch = await app.request(`/api/sources/${customId}`, {

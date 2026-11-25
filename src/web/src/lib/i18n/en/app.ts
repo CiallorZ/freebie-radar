@@ -43,6 +43,7 @@ export const EN_APP: Record<string, string> = {
   "我的收藏": "My saved",
   "全部收录": "All items",
   "已关闭": "Dismissed",
+  "待复核": "Needs review",
   "关联来源加载失败": "Failed to load related sources",
   "关联来源加载失败，请稍后重试": "Failed to load related sources, please try again",
   "退出失败，请重试": "Sign-out failed, please try again",

@@ -26,8 +26,6 @@ export const CATEGORY_KEYS = [
   "game",
   "carpool",
   "trade",
-  "headline",
-  "world",
   "finance",
   "stock",
   "tech",
@@ -59,8 +57,6 @@ const CATEGORY_LABEL_BY_KEY = {
   game: "游戏",
   carpool: "拼车/合租",
   trade: "二手/交易",
-  headline: "时政要闻",
-  world: "国际要闻",
   finance: "经济/商业",
   stock: "股票/市场",
   tech: "科技动态",
@@ -94,8 +90,6 @@ export const CATEGORY_DESC: Record<Category, string> = {
   game: "喜加一 / 史低 / 游戏本体与礼包",
   carpool: "合规拼车 / 合租 / 家庭组车位",
   trade: "明盘出鸡 / 账号与设备转让",
-  headline: "国内时政 / 政策法规 / 民生要闻",
-  world: "国际局势 / 外交 / 海外要闻",
   finance: "宏观经济 / 财报 / 融资并购 / 货币",
   stock: "A股 / 港股 / 美股 / ETF / IPO",
   tech: "科技前沿 / 芯片 / 互联网 / 航天新能源",
@@ -132,7 +126,7 @@ export const CATEGORY_GROUPS: { key: CategoryGroupKey; label: string; categories
   {
     key: "news",
     label: "新闻与资讯",
-    categories: ["headline", "world", "finance", "stock", "tech", "news"],
+    categories: ["finance", "stock", "tech", "news"],
   },
   {
     key: "other",
@@ -154,8 +148,6 @@ export function categoryLabel(category: string | null | undefined): string {
 
 /** 新闻/资讯场景下的栏目名（避免科技新闻显示成「AI 额度」）。 */
 export const NEWS_CATEGORY_LABEL: Record<string, string> = {
-  headline: "时政要闻",
-  world: "国际要闻",
   finance: "经济/商业",
   stock: "股票/市场",
   tech: "科技前沿",
@@ -194,10 +186,10 @@ export const CHANNELS: { key: string; label: string; categories: Category[]; exc
   { key: "verified", label: "真福利", categories: FREEBIE_CATEGORY_KEYS, exclude: ["pan", "course", "offline", "lottery", "opensource"] },
   { key: "free", label: "全部白嫖", categories: FREEBIE_CATEGORY_KEYS },
   { key: "offline", label: "实物福利", categories: ["offline"] },
-  { key: "news", label: "重要新闻", categories: ["headline", "world", "finance", "tech", "stock", "news", "security", "other"], exclude: ["pan", "course"] },
+  { key: "news", label: "重要新闻", categories: ["finance", "tech", "stock", "news", "security", "other"], exclude: ["pan", "course"] },
   { key: "opensource", label: "开源", categories: ["ai", "dev", "opensource", "security", "cloud", "vps", "software", "tech", "design", "hardware", "edu", "other"], exclude: ["pan", "course"] },
   { key: "deal", label: "好价", categories: ["vps", "carpool", "trade", "game", "software", "cloud", "domain", "ai", "media", "hardware", "goods", "design", "dev", "security", "edu", "other"], exclude: ["pan", "course"] },
-  { key: "info", label: "行业资讯", categories: ["finance", "stock", "tech", "ai", "dev", "hardware", "security", "cloud", "software", "game", "opensource", "design", "edu", "news", "other"], exclude: ["pan", "course"] },
+  { key: "info", label: "行业资讯", categories: ["finance", "stock", "tech", "ai", "dev", "hardware", "security", "cloud", "software", "game", "opensource", "design", "edu", "news", "goods", "other"], exclude: ["pan", "course"] },
   { key: "pan", label: "网盘/网课", categories: ["pan", "course"] },
 ];
 

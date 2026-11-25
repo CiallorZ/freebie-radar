@@ -333,3 +333,19 @@ src/
 - 本项目仅对公开网页与接口信息进行聚合、筛选与去重，不存储或传播受版权保护的内容，不提供账号共享；请遵守各目标站点的服务条款并控制合理抓取频率。
 - 基于 [MIT License](LICENSE) 开源。如果这个项目帮到了你，欢迎点个 ⭐ Star 支持！
 - 致谢 [LinuxDo](https://linux.do) 以及所有反馈问题、补充源适配与参与改进的开发者。
+
+## 云端提示词（可选）
+
+审核口径可以放在仓库外，改完不用发版：
+
+```bash
+PROMPT_URL=https://raw.githubusercontent.com/ZiChuanLan/radar-prompts/main/system.md
+PROMPT_EXTRA_URL=https://raw.githubusercontent.com/ZiChuanLan/radar-prompts/main/extra.md
+PROMPT_SYNC_MINUTES=10   # 0 = 只在启动时同步一次
+```
+
+- 启动时同步一次，之后按 `PROMPT_SYNC_MINUTES` 轮询，请求带 `If-None-Match`，304 不写库
+- 拉取失败、内容为空、超过 20000 字或非 https 时**保留上一版**，只记录 `lastError`
+- 状态与手动触发：`GET /api/ai/prompt-sync` 看状态，`POST /api/ai/prompt-sync` 立即同步（均需 ADMIN_TOKEN）
+- 自定义 `systemPrompt` 时，服务端仍会自动补上分类清单（`category` 取值与细类说明来自 `src/shared/taxonomy.ts`），所以提示词里不用重复写
+- 提示词只负责语义判断；形态 `kind` 还会被证据规则二次校验（`src/server/enrich/classify.ts`），仓库 URL、价格、兑换码这类硬事实不会被提示词推翻

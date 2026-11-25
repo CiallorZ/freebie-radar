@@ -145,8 +145,6 @@ export function guessKind(input: {
   if (input.sourceId && INFO_SOURCES.has(input.sourceId)) return "info";
   if (input.category === "opensource" && (!guard || signals.repository)) return "opensource";
   if (
-    input.category === "headline" ||
-    input.category === "world" ||
     input.category === "stock" ||
     input.category === "finance" ||
     input.category === "tech" ||
@@ -255,7 +253,10 @@ function hardContradiction(aiKind: ContentKind, input: Parameters<typeof guessKi
       // 2. 维权/风险提示文（领积分反被扣费、会员卡关店）
       if (ev.warning) return "info";
       // 3. 提问/报道体裁且没有任何可领取对象 → 资讯（权威新闻源给 news）
-      if ((ev.question || ev.editorial) && !ev.claim && !ev.giveaway && !ev.hasCodes && !ev.entitlement) {
+      // 3. 只介绍项目、没有任何可领取对象 → 开源项目（先于公告判断，开源项目发版不是资讯）
+      if (ev.project && !ev.claim && !ev.giveaway && !ev.hasCodes && !ev.entitlement) return "opensource";
+      // 4. 提问/报道/公告体裁且没有任何可领取对象 → 资讯（权威新闻源给 news）
+      if ((ev.question || ev.editorial || ev.announcement) && !ev.claim && !ev.giveaway && !ev.hasCodes && !ev.entitlement) {
         return isAuthoritativeNewsSource(input.sourceId, input.kindHint) ? "news" : "info";
       }
       // 4. 明确价格/交易动作（含标题里的 年付/$99）→ 好价

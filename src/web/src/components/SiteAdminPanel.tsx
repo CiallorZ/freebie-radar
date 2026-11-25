@@ -208,7 +208,7 @@ export function SiteAdminPanel({ onPublicConfigChange }: { onPublicConfigChange?
   return (
     <div className="space-y-4">
       {msg && (
-        <div className="toast-enter fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-[12px] font-medium text-on-solid">
+        <div className="toast-enter fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-ink-700 bg-solid px-3.5 py-2 text-[12px] font-medium text-on-solid">
           {msg}
         </div>
       )}
@@ -344,7 +344,7 @@ export function SiteAdminPanel({ onPublicConfigChange }: { onPublicConfigChange?
               }
             }}
             disabled={busy !== null}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-3 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-3 py-1.5 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
           >
             {busy === "invite" ? <Loader2 size={12} className="animate-spin" /> : <Ticket size={12} />} {t("生成")}
           </button>
@@ -516,7 +516,7 @@ export function SiteAdminPanel({ onPublicConfigChange }: { onPublicConfigChange?
               type="button"
               onClick={() => void runUpdate()}
               disabled={busy !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-2.5 py-1 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-solid px-2.5 py-1 text-[12px] font-medium text-on-solid hover:bg-solid-hover disabled:opacity-60"
             >
               {busy === "update" ? <Loader2 size={11} className="animate-spin" /> : <DownloadCloud size={11} />} {t("备份并一键更新")}
             </button>

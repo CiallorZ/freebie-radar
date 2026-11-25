@@ -1,7 +1,7 @@
 /** 撤销/终止免费：出现即说明「已经不免了」，不能当作白嫖证据。 */
 export const REVOKED_FREE = /(?:取消|撤销|停止|终止|暂停|关闭|下线)(?:了|掉|原有|所有|其|的|提供|供应|开放|使用|支持|现有|原先|此前|全部|\s){0,4}(?:免费(?:额度|层|服务|试用|使用|访问)?|白嫖|限免|福利)|不再(?:提供|开放|支持|有|享受)?\s*(?:免费|白嫖|限免)|(?:免费(?:额度|层|服务|试用)|白嫖|限免)(?:已|已经)?\s*(?:取消|撤销|停止|结束|到期|下线|不再提供)|免费\s*(?:已|已经|被)\s*(?:取消|撤销|停止|结束|到期|下线)|free\s+(?:tier|credits?|quota|access|plan)\s+(?:(?:has|is|was)\s+)?(?:been\s+)?(?:cancelled|canceled|ended|discontinued|removed)/i;
 /** 疑问/讨论/求助：没有可领取的对象。 */
-export const QUESTION_TITLE = /够不够|值不值|好不好|吗[？?]?\s*$|到底|是否|怎么|如何|求助|有没有|请问|求推荐/;
+export const QUESTION_TITLE = /够不够|值不值|好不好|吗(?:[？?，,。\s]|$)|到底|是否|怎么|如何|求助|有没有|请问|求推荐|没货|无货|售罄|死绝|绝版|还有吗|用完了|已抢完|靠谱吗|有人知道/;
 
 /** Evidence comes from the post, never from AI reason strings or the source's name. */
 export function contentSignals(title: string, summary = "") {
@@ -26,7 +26,9 @@ const specificFree = (value: string) =>
     editorial,
     revoked,
     question,
-    repository: /github\.com\/[^/\s]+\/[^/\s]+|gitlab\.com\/[^/\s]+\/[^/\s]+|开源|open[\s-]*source|自托管|self-?host|源码|MIT\s*协议|Apache\s*协议/i.test(`${title} ${summary}`),
+    // 裸「源码」不算项目证据：「XX 实战课程 含源码」「资源包含源码」是资源描述，
+    // 以前把这类课程/网盘包判成 opensource，AI 理由却写着「网盘分享 4K 剧集」，自相矛盾。
+    repository: /github\.com\/[^/\s]+\/[^/\s]+|gitlab\.com\/[^/\s]+\/[^/\s]+|gitee\.com\/[^/\s]+\/[^/\s]+|开源|open[\s-]*source|自托管|self-?host|开源源码|源码仓库|源码发布|MIT\s*协议|Apache\s*协议/i.test(`${title} ${summary}`),
   };
 }
 
@@ -43,12 +45,12 @@ export const CLASSIFICATION_PROMPT = [
   "kind 依据正文的主要目的，不依据网站名称。导购网站也会发新闻，新闻网站也可能发明确促销。",
   "deal 必须有可参与的购买/促销/价格/优惠券/付费套餐/交易证据。航班停飞、旅客经历、事故、财报和涨价报道不是特价好价；新闻里出现经济损失金额也不是售价。",
   "freebie 必须有明确可领取或免费使用的对象。只出现免费、限时、额度、会员这些词，不等于有福利。空泛讨论、常规新闻不得归为 freebie。",
-  "opensource 必须有开源项目/源码/仓库依据；仅出现版本号不构成开源证据。",
+  "opensource 必须有开源仓库地址、开源声明或源码发布；仅出现版本号不构成开源证据。课程、资源包、网盘分享里写「含源码 / 附源码 / 带源码」只是资源描述，不构成开源项目证据。",
   "网盘分享中的影视、软件、AI课程优先标 category=pan；课程内容本体可标 course，不因标题出现软件/电影/AI就改到授权、影音会员或AI额度。",
   "一般新闻与旅客经历可归 info，重要新闻归 news；keep 只控制是否值得保留，不能为保留内容强行标 deal/freebie。",
   "交易类例外：标题含「N出 / 溢价N出 / 出 / 收 / 转让 / 过户 / 出号 / 车位 / 合租 / 拼团 / 独享车」等交易意图词，且带价格或付费方式时，kind 必须是 deal，不得因为「没有促销词」判成 info。",
   "测评类例外：测评、使用记录、使用感受、选购科普、榜单推荐、横评、抄作业清单不是 freebie（没有可领取的对象），也不是 goods 优惠，应标 kind=info；只有真能领到/免费拿到的东西才是 freebie。",
-  '反例：全美航班停飞4小时，普通旅客当天实际遇到了什么 → kind=info，category=world，obtain=free；不是促销。',
+  '反例：全美航班停飞4小时，普通旅客当天实际遇到了什么 → kind=info，category=news，obtain=free；不是促销。',
   '正例：航空公司限时特价机票，单程99元 → kind=deal；GitHub学生认证免费领开发者礼包 → kind=freebie。',
   '正例：50出zouter 老HK amd 9.9/月 → kind=deal，category=trade（「出」= 转让，不是资讯）；出租一个新加坡 google ultra 5x（独享车）→ kind=deal，category=carpool。',
 ].join("\n");

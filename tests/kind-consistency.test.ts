@@ -106,8 +106,10 @@ test("真实回归锚点：真实库跑出来的反例都守住了", () => {
   assert.equal(resolveKind("deal", true, form("限时下单赠送礼包，年付79元")), "deal");
   // 明确赠送仍然可以进真福利（邀请码/抽奖）
   assert.equal(resolveKind("freebie", true, form("周一了，继续来送一个邀请码")), "freebie");
-  // 无结构证据时不擅自改判，交给词法层与 AI
-  assert.equal(structuralKind(form("某某面板 v2.0 发布", { category: "other" })), null);
+  // 公告/公测/上线体裁：没有可领取对象时是资讯（此前「开启公测」「发布」被当成福利）
+  assert.equal(resolveKind("freebie", true, form("豆包旗下 AI 助理开启公测")), "info");
+  // 无结构证据（既非公告也非领取）时不擅自改判，交给词法层与 AI
+  assert.equal(structuralKind(form("某某面板 v3.1 观察")), null);
 });
 
 test("AI 是基准：规则不因语义偏好推翻已判结论，只修硬矛盾", () => {

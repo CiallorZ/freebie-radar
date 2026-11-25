@@ -6,10 +6,12 @@ import { contentSignals } from "./evidence.ts";
 
 /** 仅拦社区求助提问/抱怨水帖/常规小版本补丁说明；不再误杀重大新闻、财经财报、黑五促销与开源盘点。 */
 export const NOISE_TITLE =
-  /^(怎样|怎么|如何|哪里|哪个|为什么|为何)|请问|有没有|求推荐|求一个|哪里(有|能)|值得买吗|怎么样\?|不够用|用完了|失效了|吐槽|踩坑|后悔|失望|谁有|求个|求购|哪有|哪里有|多少钱|求助|求带|大佬|老哥|有人吗|有人知道|怎么弄|能白嫖吗|免费更新|内容更新|版本更新|免费升级|更新公告|更新补丁|补丁说明|patch\s*notes|free\s+update/i;
+  /^(怎样|怎么|如何|哪里|哪个|为什么|为何)|请问|有没有|求推荐|求一个|哪里(有|能)|值得买吗|怎么样\?|不够用|用完了|失效了|吐槽|踩坑|后悔|失望|谁有|求个|求购|哪有|哪里有|多少钱|求助|求带|大佬|老哥|有人吗|有人知道|怎么弄|能白嫖吗|免费更新|内容更新|版本更新|免费升级|更新公告|更新补丁|补丁说明|patch\s*notes|free\s+update|留\s*id|进群|加群|私信|加微|评论区留|扣\s*[1一]|邀请返利|返利链接|中转站|点我(?:的)?链接/i;
 
 /** Explicit actionable how-to guides are not community requests merely because they start with 如何. */
 export function isNoiseTitle(title: string): boolean {
+  // 明确否定引流的说法（「无需加群」「不用留 ID」）意味着能直接领，不算推广
+  if (/无需\s*(?:加群|进群|留\s*id|私信|加微)|不用\s*(?:加群|进群|留\s*id|私信)/i.test(title)) return false;
   if (/^(如何|怎么|怎样)/.test(title) && /教程|攻略|步骤|指南/.test(title) &&
       !/请问|求助|有没有|失效|[?？]/.test(title) &&
       (contentSignals(title).claim || contentSignals(title).repository)) return false;

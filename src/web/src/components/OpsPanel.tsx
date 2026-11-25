@@ -927,7 +927,7 @@ export function OpsPanel({
                       type="button"
                       disabled={cookieBusy !== null}
                       onClick={() => void saveCookiePatch({ runnerUrl: runnerUrlInput, xhsProxy: xhsProxyInput }, "save-net")}
-                      className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-ink-950 px-2.5 text-[12px] font-medium text-on-solid hover:bg-ink-800 disabled:opacity-40"
+                      className="inline-flex h-8 flex-1 items-center justify-center rounded-lg bg-solid px-2.5 text-[12px] font-medium text-on-solid hover:bg-ink-800 disabled:opacity-40"
                     >
                       {cookieBusy === "save-net" ? <Loader2 size={12} className="animate-spin" /> : t("保存线路")}
                     </button>

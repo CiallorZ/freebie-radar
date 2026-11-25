@@ -11,6 +11,7 @@ import { config } from "./config.ts";
 import { getDb, migrate, run } from "./db.ts";
 import { registerApi, warmClusterCache } from "./routes.ts";
 import { startPushScheduler } from "./push.ts";
+import { startPromptSync } from "./enrich/prompt-sync.ts";
 import { digestExists, runDaily } from "./digest.ts";
 import { startIntervalScheduler, startScheduler } from "./cron.ts";
 import { getRetention, runCleanup } from "./retention.ts";
@@ -101,6 +102,8 @@ if (config.enableScheduler) {
   setTimeout(() => { void warmClusterCache(); }, 2_000);
   // 推送：攒批队列按 batchIntervalMin 定时合并发送（静默时段自动跳过）
   startPushScheduler();
+  // 云端提示词：配了 PROMPT_URL / PROMPT_EXTRA_URL 才启动
+  startPromptSync();
   // 个人 Bot 攒批：各用户按自己的周期出队，与全局攒批互不干扰
   startUserPushScheduler();
   // 日报：仍然按 DAILY_CRON 触发

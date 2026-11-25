@@ -3,6 +3,61 @@
 
 
 
+## 2026-11-24 · v1.1.10
+
+### 分类体系
+
+- `headline` / `world` 合并进 `news`（AI 长期互串，两者描述只差国内/国际）；迁移 items 1796 条，分类 28 → 26
+- 裸「源码」不再算开源项目证据：「XX 实战课程（含源码）」这类资源包不再被判 `opensource`
+- `linuxdo-resource` 去掉 `fixedCategory: pan`，开源推广帖不再被强制归网盘
+- 网盘频道 kind 白名单去掉 `opensource` / `news`；行业资讯频道收录 `goods`
+
+### AI 打标
+
+- 单条 `category`/`kind` 越界只丢这一条，不再作废整批 20 条重试（索引错位仍整批失败）
+- 新增检索用 `tags`：2-4 个，去重、限 16 字，落库时排在关键词标签之前；`/api/items` 支持 `tag` 精确筛选
+- 新增待复核队列：AI 判 `freebie` 但证据里没有任何可领取对象时 `status=review`，公开站隐藏，管理员侧栏处理
+
+### 提示词
+
+- `prompt-sync` 不再用 `If-None-Match`：raw.githubusercontent 的 ETag 不随内容变化，会永远 304，云端改了提示词拉不到；改为全量拉取 + 内容比对
+- 规则新增：引流推广（留 ID/进群/私信/中转站）判噪音；社区求助与晒日常不算行业资讯；导购测评归 `goods`
+
+### 采集
+
+- 下线 10 个在本机出口 IP 下从未产出过条目的源（8 个 reddit + lowendtalk + cheapshark）；
+  禁用后启用的 73 个源全部 `ok`
+
+### 运维
+
+- 新增 `docs/ops/2026-11-24-分类与源治理.md`，记录本轮运行时数据修正（约 950 条）与源下线清单
+
+## 2026-11-24 · v1.1.9
+
+### 云端提示词：改审核口径不用发版
+
+- 新增 `PROMPT_URL` / `PROMPT_EXTRA_URL` / `PROMPT_SYNC_MINUTES`：启动同步一次 + 定时轮询，请求带 `If-None-Match`，304 不写库
+- 拉取失败、内容为空、超过 20000 字、非 https 一律保留上一版，只记 `lastError`，不会把正在用的提示词换成空串
+- 状态落 `settings.prompt_sync`，`GET /api/ai/prompt-sync` 查看、`POST` 立即同步（需 ADMIN_TOKEN）
+- 自定义 `systemPrompt` 时自动补 `CATEGORY_PROMPT_LINE` / `CATEGORY_DESC_LINE`，云端文本漏写分类清单也不会让模型丢掉 `category` 取值
+- 提示词源仓库独立在 [radar-prompts](https://github.com/ZiChuanLan/radar-prompts)，`.env.example` 里默认注释，避免 fork 误用上游口径
+
+### 分类口径收紧（线上误判样本驱动）
+
+- `QUESTION_TITLE` 原来要求「吗」在句尾，「死绝了吗，卡网都没货了」被逗号截断就漏判；放宽为「吗」后可跟标点，并补 `没货/无货/售罄/死绝/绝版/还有吗/已抢完/靠谱吗/有人知道`
+- 提示词补：讨论/抱怨/库存播报无领取入口不得判 `freebie`；`reason` 只能引自原文，不许编造领取路径；实体物品一律 `category=offline`；绿色版/破解包归 `software` 不是 `opensource`
+- 提示词补：社区开源推广帖（`【开源】` 前缀或「写了个/做了个 + 工具」且指向仓库）归 `opensource`/`dev`，不得判 `pan`；网盘影视即使带「资源」二字，`kind` 也只能是 `freebie`/`info`
+- 源配置：`linuxdo-resource`（资源荟萃）去掉 `fixedCategory=pan`，混合版块不再把 AI 的正确分类覆盖成网盘
+
+### 深色主题：修白底白字
+
+- 12 处仍在用 `bg-ink-950 + text-on-solid` 的实心块（Toast、登录按钮、弹窗主按钮等）在深色主题下是白底白字，统一改用 `bg-solid`
+- `border-ink-800` 是未定义的颜色类（边框一直没生效），改 `border-ink-700`；两处弹层遮罩 `bg-ink-950/25` 在深色下变白雾，改 `bg-overlay`
+
+### 条目行内操作
+
+- 图标顺序改为「屏蔽 / 关闭 → 打开原帖 → 收藏」，`row-actions` 右对齐，悬停出现的那两个不再挤动打开原帖与收藏的位置
+
 ## 2026-11-23 · v1.1.7
 
 ### 优先级纠正：AI 是基准，规则只做初筛与兜底

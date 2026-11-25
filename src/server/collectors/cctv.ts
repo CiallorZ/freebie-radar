@@ -48,13 +48,13 @@ export const cctvCollector: Collector = {
   defaults: {
     config: {
       channels: [
-        { channel: "news", cb: "news", categoryHint: "headline", limit: 20 },
+        { channel: "news", cb: "news", categoryHint: "news", limit: 20 },
       ],
     },
   },
   async collect(ctx) {
     const channels = (ctx.config.channels as CctvChannelSpec[] | undefined) ?? [
-      { channel: "news", cb: "news", categoryHint: "headline", limit: 20 },
+      { channel: "news", cb: "news", categoryHint: "news", limit: 20 },
     ];
     const items: RawItem[] = [];
     const seenIds = new Set<string>();

@@ -105,14 +105,10 @@ const RULES: Rule[] = [
     keywords: ["出鸡", "收鸡", "转让", "过户", "出号", "成品号", "带原油", "带原邮", "原邮", "剩余价值", "明盘", "闲置出", "折价出", "转手", "出个", "出一台", "出闲置"],
   },
   {
-    category: "headline",
+    // 时政与外交合并进 news：AI 长期分不清 headline/world，只影响展示不影响判定
+    category: "news",
     weight: 1.05,
-    keywords: ["国务院", "央行", "新规", "法规", "政策", "法案", "国常会", "发改委", "工信部", "通告", "白皮书", "监管", "国务院办公厅", "政府工作", "教育部", "卫健委", "医保", "商保", "人社部", "两会", "全会", "央视", "焦点访谈"],
-  },
-  {
-    category: "world",
-    weight: 1.05,
-    keywords: ["外交部", "联合国", "峰会", "关税", "制裁", "大使馆", "多国", "欧盟", "白宫", "俄乌", "中东", "亚太", "apec", "g20", "国际社会", "国外", "海外"],
+    keywords: ["国务院", "央行", "新规", "法规", "政策", "法案", "国常会", "发改委", "工信部", "通告", "白皮书", "监管", "国务院办公厅", "政府工作", "教育部", "卫健委", "医保", "商保", "人社部", "两会", "全会", "央视", "焦点访谈", "外交部", "联合国", "峰会", "关税", "制裁", "大使馆", "多国", "欧盟", "白宫", "俄乌", "中东", "亚太", "apec", "g20", "国际社会", "海外"],
   },
   {
     category: "stock",
@@ -342,14 +338,14 @@ export function demoteEditorialGoods(
 }
 
 /** 资讯类分类：这些分类的内容是报道，不可能是「白拿福利」，AI 判成 freebie 一律降级为 info。 */
-const EDITORIAL_CATEGORIES = new Set(["headline", "world", "finance", "stock", "news"]);
+const EDITORIAL_CATEGORIES = new Set(["finance", "stock", "news"]);
 
 /**
  * 中性分类：这些分类本身不代表「有东西可领」。AI 把它们判成 freebie 时，标题里必须有领取证据，
  * 否则「买东西更划算」这类消费测评/比价文会混进真福利频道
  * （如「茅台告别抢购后，宴席、送礼买酒比以前更划算吗？」被判 freebie + tech + 74 分）。
  */
-const CLAIM_NEEDED_CATEGORIES = new Set(["tech", "hardware", "other", "headline", "world", "finance", "stock", "news"]);
+const CLAIM_NEEDED_CATEGORIES = new Set(["tech", "hardware", "other", "finance", "stock", "news"]);
 
 /** contentSignals().claim 没覆盖、但标题里一样算「真有东西可领」的说法。 */
 const TITLE_CLAIM_RE = /免费|可领|能领|领了|到账|\b(?:free|giveaway|coupon)\b/i;

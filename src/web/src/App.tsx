@@ -35,6 +35,7 @@ import {
   BookOpen,
   MoreHorizontal,
   LogOut,
+  Flag,
 } from "lucide-react";
 import { CompactRow, ItemCard, ItemDetailDrawer, QuickBlockModal } from "./components/ItemView.tsx";
 import { AdminGate } from "./components/AdminGate.tsx";
@@ -171,7 +172,7 @@ function useApi<T>(url: string | null, scope = ""): { data: T | null; loading: b
 function Toast({ message }: { message: string | null }) {
   if (!message) return null;
   return (
-    <div role="status" aria-live="polite" className="toast-enter fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-ink-800 bg-ink-950 px-3.5 py-2 text-[12px] font-medium text-on-solid shadow-lg">
+    <div role="status" aria-live="polite" className="toast-enter fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-lg border border-ink-700 bg-solid px-3.5 py-2 text-[12px] font-medium text-on-solid shadow-lg">
       <Bell size={14} className="text-ink-300" />
       {message}
     </div>
@@ -197,6 +198,8 @@ const SECONDARY_VIEWS: Preset[] = [
   { key: "starred", label: t("我的收藏"), icon: Check },
   { key: "all", label: t("全部收录"), icon: AlignJustify },
   { key: "hidden", label: t("已关闭"), icon: EyeOff },
+  // 待复核：AI 判成福利但证据里没有可领取对象，公开站看不到，只有管理员能处理
+  { key: "review", label: t("待复核"), icon: Flag },
 ];
 
 const PRESETS: Preset[] = [...PRIMARY_CHANNELS, ...SECONDARY_VIEWS];
@@ -873,7 +876,7 @@ export function App() {
         setAuthHash(null);
         setAuthOpen(true);
       }}
-      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-ink-950 px-2 py-1 text-[12px] font-medium whitespace-nowrap text-on-solid hover:bg-solid-hover"
+      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-solid px-2 py-1 text-[12px] font-medium whitespace-nowrap text-on-solid hover:bg-solid-hover"
       title={t("用 LINUX DO 登录")}
     >
       <User size={12} /> {t("登录")}
@@ -883,7 +886,7 @@ export function App() {
   // 快捷视图 + 数据源树：桌面在侧栏常驻，移动端折进「筛选」面板里
   const sourcePanelNode = (
     <SourcePanel
-      views={SECONDARY_VIEWS}
+      views={SECONDARY_VIEWS.filter((view) => view.key !== "review" || adminReady)}
       preset={preset}
       onPickPreset={switchPreset}
       grouped={grouped}
@@ -1584,7 +1587,7 @@ export function App() {
               onSearchWord={(w) => handleTab("feed", { ...DEFAULT_FEED_STATE, search: w, preset: hotScope === "news" ? "news" : hotScope === "info" ? "info" : hotScope === "deals" ? "verified" : "all" })}
               onJumpCategory={(cat) => {
                 const targetPreset =
-                  hotScope === "news" || cat === "headline" || cat === "world"
+                  hotScope === "news" || cat === "news"
                     ? "news"
                     : hotScope === "info" || cat === "stock" || cat === "tech" || cat === "finance"
                       ? "info"

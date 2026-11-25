@@ -216,9 +216,9 @@ test("buildHotReport：最值得抢严格排除新闻/资讯/二手，对同事�
   insertItem({ sourceId: "linuxdo-welfare", title: "天翼云免费领 4核8G 云电脑", category: "cloud", kind: "freebie", score: 95, aiQuality: 5, publishedAt: now });
   insertItem({ sourceId: "rss-nodeseek", title: "DediRock 黑五特价 $10/年 VPS", category: "vps", kind: "deal", score: 86, aiQuality: 4, publishedAt: now });
   insertItem({ sourceId: "rss-nodeseek", title: "出 懒猫家宽 1折账号转让", category: "trade", kind: "deal", score: 88, aiQuality: 5, publishedAt: now });
-  insertItem({ sourceId: "rss-ithome", title: "2026 商保创新药目录扩容，百万元 CAR-T 抗癌药入选，患者自付下降", category: "headline", kind: "news", score: 68, aiQuality: 5, publishedAt: now });
-  insertItem({ sourceId: "rss-smzdm", title: "129万一针的CAR-T首次进医保，降至30万？", category: "headline", kind: "news", score: 63, aiQuality: 5, publishedAt: now });
-  insertItem({ sourceId: "rss-smzdm", title: "首款CAR-T进医保，其他CAR-T患者怎么办", category: "headline", kind: "news", score: 63, aiQuality: 5, publishedAt: now });
+  insertItem({ sourceId: "rss-ithome", title: "2026 商保创新药目录扩容，百万元 CAR-T 抗癌药入选，患者自付下降", category: "news", kind: "news", score: 68, aiQuality: 5, publishedAt: now });
+  insertItem({ sourceId: "rss-smzdm", title: "129万一针的CAR-T首次进医保，降至30万？", category: "news", kind: "news", score: 63, aiQuality: 5, publishedAt: now });
+  insertItem({ sourceId: "rss-smzdm", title: "首款CAR-T进医保，其他CAR-T患者怎么办", category: "news", kind: "news", score: 63, aiQuality: 5, publishedAt: now });
   insertItem({ sourceId: "rss-wallstreetcn", title: "Anthropic 冲刺 IPO 估值超万亿美元", category: "stock", kind: "info", score: 70, aiQuality: 4, publishedAt: now });
 
   const allReport = buildHotReport(24, "all");
