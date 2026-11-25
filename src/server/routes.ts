@@ -162,8 +162,8 @@ export type ItemRow = {
   canonical_id?: number | null;
 };
 
-// List payloads never select full snapshots. The drawer fetches content on demand.
-const LIST_COLUMNS = "id, source_id, external_id, url, url_key, title_key, title, SUBSTR(summary, 1, 1200) AS summary, author, category, image_url, kind, ai_quality, tags, codes, price, is_free, obtain, score, expires_at, published_at, status, starred, ai, read_at, pushed_at, first_seen_at, last_seen_at, canonical_id";
+// List and related payloads never select full snapshots (no content/raw). The drawer fetches content on demand via /api/items/:id.
+const LIST_COLUMNS = "items.id, items.source_id, items.external_id, items.url, items.url_key, items.title_key, items.title, SUBSTR(items.summary, 1, 1200) AS summary, items.author, items.category, items.image_url, items.kind, items.ai_quality, items.tags, items.codes, items.price, items.is_free, items.obtain, items.score, items.expires_at, items.published_at, items.status, items.starred, items.ai, items.read_at, items.pushed_at, items.first_seen_at, items.last_seen_at, items.canonical_id";
 
 /** 订阅命中的关键词（都转小写比较），用于前端高亮与筛选。 */
 function matchKeywords(row: ItemRow, keywords: string[]): string[] {
@@ -231,12 +231,95 @@ function applyUserStates<T extends { id: number; starred: boolean; read: boolean
 }
 
 const SORTS: Record<string, string> = {
-  score: "score DESC, COALESCE(published_at, first_seen_at) DESC",
-  newest: "COALESCE(published_at, first_seen_at) DESC",
-  oldest: "COALESCE(published_at, first_seen_at) ASC",
-  expiring: "CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END ASC, expires_at ASC, score DESC",
-  price_asc: "CASE WHEN is_free = 1 THEN 0 WHEN price IS NOT NULL THEN price ELSE 999999 END ASC, score DESC",
+  score: "score DESC, COALESCE(published_at, first_seen_at) DESC, id DESC",
+  newest: "COALESCE(published_at, first_seen_at) DESC, id DESC",
+  oldest: "COALESCE(published_at, first_seen_at) ASC, id ASC",
+  expiring: "CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END ASC, expires_at ASC, score DESC, id DESC",
+  price_asc: "CASE WHEN is_free = 1 THEN 0 WHEN price IS NOT NULL THEN price ELSE 999999 END ASC, score DESC, id DESC",
 };
+/**
+ * 键集分页（E9）：/api/items 支持 cursor 参数，替代深 offset 翻页。
+ * cursor 是 base64url 编码的 JSON 数组，按当前 sort 的排序键取值，末尾总有 id 兜底，
+ * 同键值多行时也不丢不重；offset 只保留给管理端小表，前端翻页应传 cursor。
+ * 旧问题：merge 模式 fetchLimit 上限 600 + offset 切片，翻深了就取不到数据、total 还是
+ * 估算值；cursor 让每一页都从上一页末尾继续取，翻到底也不会断。cursor 翻页时 total
+ * 为剩余估计值（COUNT 同样受 cursor 约束），第一页的 total 与原来一致。
+ * 注意：merge 模式的代表条目仍按每页窗口重算，与旧 offset 行为相同，同一聚类
+ * 可能换代表出现在下一页——聚类跨页稳定性不在本次改动范围。
+ */
+type SortKey = { expr: string; dir: "ASC" | "DESC" };
+const SORT_KEYS: Record<string, SortKey[]> = {
+  score: [
+    { expr: "score", dir: "DESC" },
+    { expr: "COALESCE(published_at, first_seen_at)", dir: "DESC" },
+    { expr: "id", dir: "DESC" },
+  ],
+  newest: [
+    { expr: "COALESCE(published_at, first_seen_at)", dir: "DESC" },
+    { expr: "id", dir: "DESC" },
+  ],
+  oldest: [
+    { expr: "COALESCE(published_at, first_seen_at)", dir: "ASC" },
+    { expr: "id", dir: "ASC" },
+  ],
+  expiring: [
+    { expr: "CASE WHEN expires_at IS NULL THEN 1 ELSE 0 END", dir: "ASC" },
+    { expr: "expires_at", dir: "ASC" },
+    { expr: "score", dir: "DESC" },
+    { expr: "id", dir: "DESC" },
+  ],
+  price_asc: [
+    { expr: "CASE WHEN is_free = 1 THEN 0 WHEN price IS NOT NULL THEN price ELSE 999999 END", dir: "ASC" },
+    { expr: "score", dir: "DESC" },
+    { expr: "id", dir: "DESC" },
+  ],
+};
+
+/** 按排序键逐键比较的 keyset 条件：(k1 op v1) OR (k1 = v1 AND k2 op v2) OR …；等值用 IS ?，NULL 键也能比。 */
+function buildKeysetCondition(keys: SortKey[], values: SqlValue[]): { sql: string; params: SqlValue[] } {
+  const branches: string[] = [];
+  const params: SqlValue[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    const terms: string[] = [];
+    for (let j = 0; j < i; j++) {
+      terms.push(`${keys[j]!.expr} IS ?`);
+      params.push(values[j]!);
+    }
+    terms.push(`${keys[i]!.expr} ${keys[i]!.dir === "ASC" ? ">" : "<"} ?`);
+    params.push(values[i]!);
+    branches.push(`(${terms.join(" AND ")})`);
+  }
+  return { sql: `(${branches.join(" OR ")})`, params };
+}
+
+function encodeCursor(values: SqlValue[]): string {
+  return Buffer.from(JSON.stringify(values), "utf8").toString("base64url");
+}
+
+function decodeCursor(raw: string, expected: number): SqlValue[] | null {
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (!Array.isArray(parsed) || parsed.length !== expected) return null;
+    if (!parsed.every((v) => v === null || typeof v === "number" || typeof v === "string")) return null;
+    return parsed as SqlValue[];
+  } catch {
+    return null;
+  }
+}
+
+/** 取某行在当前排序下的键值（与 SORT_KEYS 一一对应，供 encodeCursor 用）。 */
+function cursorValuesForRow(row: ItemRow, keys: SortKey[]): SqlValue[] {
+  const published = row.published_at ?? row.first_seen_at;
+  return keys.map((k) => {
+    if (k.expr === "id") return row.id;
+    if (k.expr === "score") return row.score;
+    if (k.expr === "COALESCE(published_at, first_seen_at)") return published;
+    if (k.expr === "expires_at") return row.expires_at;
+    if (k.expr.startsWith("CASE WHEN expires_at")) return row.expires_at === null ? 1 : 0;
+    if (k.expr.startsWith("CASE WHEN is_free")) return row.is_free === 1 ? 0 : (row.price ?? 999999);
+    return null;
+  });
+}
 /**
  * 跨源聚类的唯一入口：「N 个来源」徽标和展开列表必须用同一个候选池。
  * 池子 = 同一 (kind, category) 分组，与当前筛选条件无关：
@@ -724,7 +807,7 @@ export function registerApi(app: Hono) {
   app.get("/api/items", (c) => {
     const q = c.req.query();
     const limit = Math.min(Math.max(Math.floor(Number(q.limit ?? 40)), 1), 200);
-    const offset = Math.max(Math.floor(Number(q.offset ?? 0)), 0);
+    let offset = Math.max(Math.floor(Number(q.offset ?? 0)), 0);
     const id = identityOf(c);
     const includeBlocked = q.includeBlocked === "1" && (id.isAdmin || Boolean(id.user));
     const rules = id.siteMode === "public" && id.user
@@ -743,6 +826,18 @@ export function registerApi(app: Hono) {
     }
 
     const { where, params, subKeywords } = buildItemsQuery(q, rules, includeBlocked, scope);
+    const sortName = SORTS[q.sort ?? "newest"] ? (q.sort ?? "newest") : "newest";
+    const sortKeys = SORT_KEYS[sortName]!;
+    // 键集分页：cursor 优先于 offset。where 里先加 keyset 条件，merge 的代表条目
+    // 子查询会复用同一批过滤条件，代表选择同样只在 cursor 之后取。
+    if (q.cursor) {
+      const cursorValues = decodeCursor(q.cursor, sortKeys.length);
+      if (!cursorValues) return c.json({ error: "cursor 无效，请重新加载第一页" }, 400);
+      const keyset = buildKeysetCondition(sortKeys, cursorValues);
+      where.push(keyset.sql);
+      params.push(...keyset.params);
+      offset = 0;
+    }
     // 同一福利常被十几个源同时报道（Epic 喜加一尤甚），列表默认按 title_key 收敛：
     // 每组只保留最早入库的那条，前端按 dup_count 显示「N 个来源」并可展开。
     // 指定了单源或「我的收藏」时不做跨源合并，避免主记录落在别处导致本源条目被隐藏。
@@ -767,7 +862,7 @@ const keyOk = "LENGTH(CAST(title_key AS BLOB)) >= 6";
       params.push(...params.slice());
     }
     const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-    const order = SORTS[q.sort ?? "newest"] ?? SORTS.newest;
+    const order = SORTS[sortName]!;
     const rawTotal = get<{ n: number }>(`SELECT COUNT(*) AS n FROM items ${clause}`, ...params)?.n ?? 0;
 
     if (!merge) {
@@ -781,6 +876,7 @@ const keyOk = "LENGTH(CAST(title_key AS BLOB)) >= 6";
         total: rawTotal,
         limit,
         offset,
+        nextCursor: rows.length >= limit ? encodeCursor(cursorValuesForRow(rows[rows.length - 1]!, sortKeys)) : null,
         items: applyUserStates(
           rows.map((r) => {
             const hit = includeBlocked ? matchBlockRules(r, rules) : null;
@@ -820,6 +916,11 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
       total,
       limit,
       offset,
+      // 还有没取完的代表条目（本页切片外），或原始候选已触到 fetchLimit 上限时，都给下一页 cursor
+      nextCursor:
+        page.length > 0 && (representatives.length > offset + limit || candidates.length >= fetchLimit)
+          ? encodeCursor(cursorValuesForRow(page[page.length - 1]!.row, sortKeys))
+          : null,
       items: applyUserStates(
         page.map(({ row: r, dupCount }) => {
           const hit = includeBlocked ? matchBlockRules(r, rules) : null;
@@ -837,10 +938,8 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
   app.get("/api/items/:id/related", (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isFinite(id)) return c.json({ error: "bad id" }, 400);
-    const self = get<ItemRow & { source_name?: string }>(
-      `SELECT items.*, s.name AS source_name
-         FROM items LEFT JOIN sources s ON s.id = items.source_id
-        WHERE items.id = ?`,
+    const self = get<{ id: number; kind: string | null; category: string | null }>(
+      `SELECT id, kind, category FROM items WHERE id = ?`,
       id,
     );
     if (!self) return c.json({ items: [] });
@@ -857,7 +956,7 @@ const fetchLimit = Math.min(Math.max(offset + limit * 3, 240), 600);
     if (!memberIds.length) return c.json({ items: [] });
 
     const members = all<ItemRow & { source_name?: string }>(
-      `SELECT items.*, s.name AS source_name
+      `SELECT ${LIST_COLUMNS}, s.name AS source_name
          FROM items LEFT JOIN sources s ON s.id = items.source_id
         WHERE items.id IN (${memberIds.map(() => "?").join(",")})
         ORDER BY items.score DESC, items.id ASC`,
