@@ -43,7 +43,12 @@ export const cheapsharkCollector: Collector = {
     const url = "https://www.cheapshark.com/api/1.0/deals?upperPrice=" + upperPrice + "&pageSize=" + pageSize + "&onSale=1";
     ctx.log("GET " + url);
 
-    const res = await ctx.http.json<Deal[]>(url);
+    // CheapShark API 明确要求描述性 UA：curl 默认 UA 回 400，浏览器 UA 会被
+    // Cloudflare 间歇 403（2026-11-16 起连续失败 8 次）；描述性 UA 实测稳定 200。
+    // http 层 curl 路径 -H 会覆盖 -A 的默认 UA，fetch 回退路径同样走 headers。
+    const res = await ctx.http.json<Deal[]>(url, {
+      headers: { "user-agent": "FreebieRadar (https://github.com/CiallorZ/freebie-radar)" },
+    });
     if (res.status !== 200) throw new Error("CheapShark HTTP " + res.status);
     const list = Array.isArray(res.data) ? res.data : [];
 

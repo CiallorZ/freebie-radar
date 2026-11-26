@@ -1618,13 +1618,15 @@ export function OpsPanel({
           </div>
 
           {retention && (
-            <div className="grid gap-3 sm:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-4">
               {[
                 { key: "itemDays" as const, label: t("非福利条目"), hint: t("天") },
                 { key: "keptDays" as const, label: t("AI 判福利"), hint: t("天") },
                 { key: "ignoredDays" as const, label: t("手动关闭"), hint: t("天") },
                 { key: "pushLogDays" as const, label: t("推送日志"), hint: t("天") },
                 { key: "digestDays" as const, label: t("每日精选"), hint: t("天") },
+                { key: "runsDays" as const, label: t("采集运行记录"), hint: t("天") },
+                { key: "failedRunsDays" as const, label: t("失败运行记录"), hint: t("天") },
               ].map((f) => (
                 <label key={f.key} className="block rounded-lg border border-ink-200 bg-surface-hover p-3">
                   <span className="mb-1.5 block text-[12px] font-medium text-ink-700">{f.label}</span>
