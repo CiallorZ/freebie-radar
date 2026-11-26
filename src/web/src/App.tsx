@@ -518,7 +518,32 @@ export function App() {
   const stats = useApi<Stats>(statsQuery ? `/api/stats?${statsQuery}` : "/api/stats", identityScope);
   const guestIds = guestMode && (preset === "starred" || preset === "hidden")
     ? `&ids=${(preset === "starred" ? guest.starred : guest.hidden).slice(0, 100).join(",") || "0"}` : "";
-  const items = useApi<{ total: number; items: Item[] }>(`/api/items?${query}${guestIds}`, identityScope);
+  const items = useApi<{ total: number; items: Item[]; nextCursor?: string | null }>(`/api/items?${query}${guestIds}`, identityScope);
+  // E9 前端接入键集分页：首屏只取 100 条，点“加载更多”用后端 nextCursor 续取，
+  // 追加进当前列表；换筛选条件时 useApi 重新拉第一页，追加内容随之清空。
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  useEffect(() => { setLoadingMore(false); setLoadMoreError(null); }, [query, guestIds]);
+  const loadMore = useCallback(async () => {
+    const cursor = items.data?.nextCursor;
+    if (!cursor || loadingMore || items.loading) return;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    try {
+      const res = await fetch(`/api/items?${query}${guestIds}&cursor=${encodeURIComponent(cursor)}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? `${res.status} ${res.statusText}`);
+      }
+      const page = await res.json() as { total: number; items: Item[]; nextCursor?: string | null };
+      // 后续页的 total 是剩余估计值，保留第一页的 total 作总数
+      items.update((cur) => cur ? { ...cur, items: [...cur.items, ...page.items], nextCursor: page.nextCursor ?? null } : cur);
+    } catch (e: unknown) {
+      setLoadMoreError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [items, query, guestIds, loadingMore]);
   // A workspace is explicit; administrator authentication never replaces personal settings.
   const effectiveScope = configurationScope(workspaceScope, isPublicSite, Boolean(me));
   const rulesBase = bootData ? configurationBase(workspaceScope, isPublicSite, Boolean(me), adminReady) : null;
@@ -1570,6 +1595,22 @@ export function App() {
                     <button type="button" onClick={() => { resetFilters(); setPreset("all"); }} className="rounded-md bg-solid px-4 py-2 text-[12px] font-medium text-on-solid hover:bg-solid-hover">{t("浏览全部收录")}</button>
                   </div>
                 </div>
+              )}
+              {!items.loading && !items.error && visible.length > 0 && items.data?.nextCursor && (
+                <div className="flex flex-col items-center gap-2 px-6 py-6">
+                  <div className="text-[12px] text-ink-500">{t("已加载 {n} / 共 {total} 条", { n: visible.length, total: items.data.total })}</div>
+                  <button type="button" onClick={loadMore} disabled={loadingMore} className="rounded-md border border-ink-200 px-5 py-2 text-[13px] font-medium text-ink-700 hover:bg-ink-100 disabled:opacity-50">
+                    {loadingMore ? t("加载中…") : t("加载更多")}
+                  </button>
+                  {loadMoreError && (
+                    <div className="text-[12px] text-ink-500">
+                      {t("加载失败：")}{loadMoreError} <button type="button" onClick={loadMore} className="ml-1 underline">{t("重试")}</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!items.loading && !items.error && visible.length > 0 && !items.data?.nextCursor && items.data && (
+                <div className="py-5 text-center text-[12px] text-ink-400">{t("已加载全部 {n} 条", { n: visible.length })}</div>
               )}
             </>
           )}

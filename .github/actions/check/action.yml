@@ -1,0 +1,29 @@
+name: Check
+description: 安装依赖、类型检查、单测、前端构建（CI 与发布流水线共用）
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+
+    - name: Install
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    - name: Typecheck
+      shell: bash
+      run: npx tsc --noEmit
+
+    - name: Unit tests
+      shell: bash
+      run: node --test tests/*.test.ts
+
+    - name: Build web
+      shell: bash
+      run: npx vite build

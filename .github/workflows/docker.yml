@@ -18,7 +18,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 推镜像前先过同一套检查：CI 失败不该让坏代码进镜像库
+  # （v1.1.11 就是这么把单测失败的版本推到 Hub 的）
+  gate:
+    if: github.repository == 'ZiChuanLan/freebie-radar'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/check
+
   publish:
+    needs: gate
     # 只在自家仓库推送镜像，fork 不跑（避免误用别人的 secrets）
     if: github.repository == 'ZiChuanLan/freebie-radar'
     runs-on: ubuntu-latest

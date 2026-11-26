@@ -86,9 +86,12 @@ export function guessExpiry(text: string): string | null {
   const now = Date.now();
   const m = /(\d{1,2})\s*月\s*(\d{1,2})\s*日/.exec(text);
   if (m) {
-    const year = new Date().getFullYear();
+    // 正文里写了年份就用年份：否则「2020 年的 7 月 13 日活动」会被推到明年，
+    // 让一条几年前的旧帖长期挂着有效期。
+    const stated = /(20\d{2})\s*年/.exec(text);
+    const year = stated ? Number(stated[1]) : new Date().getFullYear();
     const d = new Date(year, Number(m[1]) - 1, Number(m[2]), 23, 59, 59);
-    if (d.getTime() < now - 86_400_000) d.setFullYear(year + 1);
+    if (!stated && d.getTime() < now - 86_400_000) d.setFullYear(year + 1);
     return d.toISOString();
   }
   const rel = /(\d+)\s*(天|日)\s*(?:内|后)?(?:有效|截止|过期)/.exec(text);
