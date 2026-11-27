@@ -91,6 +91,7 @@ export function groupOfSource(s: Source): SourceGroupKey {
   }
   if (
     id.startsWith("github-") ||
+    id === "rss-hellogithub" ||
     id === "openrouter-free" ||
     id === "bsky-plugins" ||
     /shareware|tickcoupon|giveawayoftheday|ghxi|yxssp|freegroup|appinn|iplaysoft|iapps|apphookup|googleplay|freeebooks/i.test(

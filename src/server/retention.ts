@@ -10,6 +10,7 @@ import { all, get, run } from "./db.ts";
  *  - 手动关闭（ignored）的尽快清掉
  *  - 推送日志、日报只留最近一段
  *  - 采集运行记录只留最近一段，失败的多留一阵方便排障
+ *  - 已过期的条目每天翻一次状态（active -> expired），别让过期福利一直混在最新列表里
  */
 export type RetentionSettings = {
   /** 普通条目保留天数：超过且非福利、非收藏的删掉 */
@@ -92,6 +93,8 @@ export function saveRetention(patch: Partial<RetentionSettings>): RetentionSetti
 
 export type CleanupReport = {
   deleted: Record<string, number>;
+  /** 本次把已过期 active 条目标记为 expired 的数量 */
+  expiredMarked: number;
   remaining: number;
   at: string;
 };
@@ -102,6 +105,25 @@ export function runCleanup(s?: RetentionSettings, dryRun = false): CleanupReport
   const now = Date.now();
   const iso = (days: number) => new Date(now - days * 86_400_000).toISOString();
   const deleted: Record<string, number> = {};
+
+  // U3：已过期的条目每天翻一次状态（active -> expired），否则过期福利会一直
+  // 混在“最新”列表里，等 60 天保留清理才消失；列表的 unexpired 过滤只是兜底。
+  const nowIso = new Date(now).toISOString();
+  let expiredMarked = 0;
+  if (dryRun) {
+    expiredMarked =
+      get<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM items WHERE expires_at IS NOT NULL AND expires_at <= ? AND status = 'active'",
+        nowIso,
+      )?.n ?? 0;
+  } else {
+    expiredMarked = Number(
+      run(
+        "UPDATE items SET status = 'expired' WHERE expires_at IS NOT NULL AND expires_at <= ? AND status = 'active'",
+        nowIso,
+      ).changes,
+    );
+  }
 
   const plans: { label: string; sql: string; params: (string | number)[] }[] = [
     {
@@ -161,7 +183,7 @@ export function runCleanup(s?: RetentionSettings, dryRun = false): CleanupReport
   }
 
   const remaining = get<{ n: number }>("SELECT COUNT(*) AS n FROM items")?.n ?? 0;
-  return { deleted, remaining, at: new Date().toISOString() };
+  return { deleted, expiredMarked, remaining, at: new Date().toISOString() };
 }
 
 /** 数据库体积（MB），用于判断清理是否必要。 */

@@ -49,3 +49,50 @@ test('runCleanup dryRun：只统计不删除', () => {
   assert.equal(report.deleted['失败的采集运行记录'], 0);
   assert.equal(runCount(), beforeCount);
 });
+
+let itemSeq = 0;
+function addItem(expiresAt: string | null, status = 'active'): number {
+  const now = new Date().toISOString();
+  itemSeq += 1;
+  const info = run(
+    'INSERT INTO items (source_id, external_id, url, url_key, title, expires_at, published_at, status, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    's-test',
+    'ext-' + itemSeq,
+    'https://example.com/x',
+    'k-' + itemSeq,
+    '测试条目',
+    expiresAt,
+    now,
+    status,
+    now,
+    now,
+  );
+  return Number(info.lastInsertRowid);
+}
+
+function itemStatus(id: number): string {
+  return get<{ status: string }>('SELECT status FROM items WHERE id = ?', id)?.status ?? '';
+}
+
+test('runCleanup：已过期的 active 条目自动翻转为 expired', () => {
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const idPast = addItem(past);
+  const idFuture = addItem(future);
+  const idNoExpiry = addItem(null);
+  const idIgnored = addItem(past, 'ignored');
+  const report = runCleanup({ ...DEFAULT_RETENTION });
+  assert.equal(itemStatus(idPast), 'expired');
+  assert.equal(itemStatus(idFuture), 'active');
+  assert.equal(itemStatus(idNoExpiry), 'active');
+  assert.equal(itemStatus(idIgnored), 'ignored');
+  assert.equal(report.expiredMarked, 1);
+});
+
+test('runCleanup dryRun：过期标记只统计不翻转', () => {
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+  const idPast = addItem(past);
+  const report = runCleanup({ ...DEFAULT_RETENTION }, true);
+  assert.equal(itemStatus(idPast), 'active');
+  assert.equal(report.expiredMarked, 1);
+});

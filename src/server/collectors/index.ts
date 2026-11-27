@@ -258,6 +258,7 @@ export const SEEDS: SourceSeed[] = [
   { id: "rss-producthunt", name: "Product Hunt", kind: "rss", enabled: true, config: { feeds: [{ id: "producthunt", url: "https://www.producthunt.com/feed", limit: 25 }] } },
   { id: "rss-hnrss", name: "Hacker News（100+ 分）", kind: "rss", enabled: true, config: { feeds: [{ id: "hnrss", url: "https://hnrss.org/frontpage?points=100", limit: 25 }] } },
   { id: "rss-ruanyifeng", name: "阮一峰 · 科技爱好者周刊", kind: "rss", enabled: true, intervalSec: 21600, config: { feeds: [{ id: "ruanyifeng", url: "https://www.ruanyifeng.com/blog/atom.xml", limit: 10 }] } },
+  { id: "rss-hellogithub", name: "HelloGitHub 月刊", kind: "rss", enabled: true, intervalSec: 21600, config: { kindHint: "info", categoryHint: "opensource", feeds: [{ id: "hellogithub", url: "https://hellogithub.com/rss", limit: 10, categoryHint: "opensource" }] } },
   { id: "github-free-for-dev", name: "GitHub · free-for-dev", kind: "github-readme", enabled: true, config: { repos: [{ repo: "ripienaar/free-for-dev", limit: 60 }] } },
   { id: "github-public-apis", name: "GitHub · 免费公开 API", kind: "github-readme", enabled: true, config: { repos: [{ repo: "public-apis/public-apis", limit: 40 }] } },
   { id: "github-awesome-ai", name: "GitHub · AI 工具清单", kind: "github-readme", enabled: true, config: { repos: [{ repo: "mahseema/awesome-ai-tools", limit: 40 }] } },
