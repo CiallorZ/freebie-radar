@@ -1,0 +1,98 @@
+import assert from 'node:assert/strict';
+import { after, before, test } from 'node:test';
+
+// 在导入 db 前强制走内存库，避免污染本地 data/radar.db
+process.env.DATABASE_PATH = ':memory:';
+
+const { migrate, run, get, closeDb } = await import('../src/server/db.ts');
+const { runCleanup, DEFAULT_RETENTION } = await import('../src/server/retention.ts');
+
+before(() => {
+  migrate();
+});
+
+after(() => {
+  closeDb();
+});
+
+function addRun(sourceId: string, status: string, daysAgo: number): void {
+  const started = new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+  run(
+    'INSERT INTO runs (source_id, started_at, finished_at, status, fetched, inserted) VALUES (?, ?, ?, ?, 0, 0)',
+    sourceId,
+    started,
+    started,
+    status,
+  );
+}
+
+function runCount(): number {
+  return get<{ n: number }>('SELECT COUNT(*) AS n FROM runs')?.n ?? -1;
+}
+
+test('runCleanup：采集运行记录按状态分档保留', () => {
+  addRun('s-ok-old', 'ok', 40);
+  addRun('s-ok-recent', 'ok', 5);
+  addRun('s-failed-mid', 'failed', 40);
+  addRun('s-failed-old', 'failed', 100);
+  assert.equal(runCount(), 4);
+  const report = runCleanup({ ...DEFAULT_RETENTION, runsDays: 30, failedRunsDays: 90 });
+  assert.equal(report.deleted['采集运行记录'], 1);
+  assert.equal(report.deleted['失败的采集运行记录'], 1);
+  assert.equal(runCount(), 2);
+});
+
+test('runCleanup dryRun：只统计不删除', () => {
+  const beforeCount = runCount();
+  const report = runCleanup({ ...DEFAULT_RETENTION, runsDays: 30, failedRunsDays: 90 }, true);
+  assert.equal(report.deleted['采集运行记录'], 0);
+  assert.equal(report.deleted['失败的采集运行记录'], 0);
+  assert.equal(runCount(), beforeCount);
+});
+
+let itemSeq = 0;
+function addItem(expiresAt: string | null, status = 'active'): number {
+  const now = new Date().toISOString();
+  itemSeq += 1;
+  const info = run(
+    'INSERT INTO items (source_id, external_id, url, url_key, title, expires_at, published_at, status, first_seen_at, last_seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    's-test',
+    'ext-' + itemSeq,
+    'https://example.com/x',
+    'k-' + itemSeq,
+    '测试条目',
+    expiresAt,
+    now,
+    status,
+    now,
+    now,
+  );
+  return Number(info.lastInsertRowid);
+}
+
+function itemStatus(id: number): string {
+  return get<{ status: string }>('SELECT status FROM items WHERE id = ?', id)?.status ?? '';
+}
+
+test('runCleanup：已过期的 active 条目自动翻转为 expired', () => {
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+  const future = new Date(Date.now() + 86_400_000).toISOString();
+  const idPast = addItem(past);
+  const idFuture = addItem(future);
+  const idNoExpiry = addItem(null);
+  const idIgnored = addItem(past, 'ignored');
+  const report = runCleanup({ ...DEFAULT_RETENTION });
+  assert.equal(itemStatus(idPast), 'expired');
+  assert.equal(itemStatus(idFuture), 'active');
+  assert.equal(itemStatus(idNoExpiry), 'active');
+  assert.equal(itemStatus(idIgnored), 'ignored');
+  assert.equal(report.expiredMarked, 1);
+});
+
+test('runCleanup dryRun：过期标记只统计不翻转', () => {
+  const past = new Date(Date.now() - 86_400_000).toISOString();
+  const idPast = addItem(past);
+  const report = runCleanup({ ...DEFAULT_RETENTION }, true);
+  assert.equal(itemStatus(idPast), 'active');
+  assert.equal(report.expiredMarked, 1);
+});

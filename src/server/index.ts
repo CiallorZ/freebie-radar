@@ -131,7 +131,8 @@ if (config.enableScheduler) {
       if (!cfg.auto) return;
       const r = runCleanup(cfg);
       const total = Object.values(r.deleted).reduce((a, b) => a + b, 0);
-      if (total > 0) console.log("[cleanup]", JSON.stringify(r.deleted), "剩余", r.remaining);
+      if (total > 0 || r.expiredMarked > 0)
+        console.log("[cleanup]", JSON.stringify(r.deleted), "过期标记", r.expiredMarked, "剩余", r.remaining);
     } catch (err) {
       console.error("[cleanup] 失败:", err instanceof Error ? err.message : err);
     }

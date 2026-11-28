@@ -542,6 +542,31 @@ test("GET /api/items 全分类 48h 窗口跨源折叠：cloud 分类同标题合
   assert.equal(relJson.items[0]!.source_id, "tg-cn-deals");
 });
 
+test("E8：/api/items/:id/related 不回传全文 content，详情接口仍回传全文", async () => {
+  run("DELETE FROM items");
+  const nowIso = new Date().toISOString();
+  const longContent = "正文全文。".repeat(500);
+  run(
+    `INSERT INTO items (source_id, external_id, url, url_key, title, title_key, category, score, published_at, status, is_free, obtain, content, first_seen_at, last_seen_at)
+     VALUES ('rss-nodeseek', 'e8-main', 'https://nodeseek.com/e8-main', 'nodeseek/e8-main', 'E8 测试同标题条目', 'e8测试同标题条目', 'cloud', 76, ?, 'active', 1, 'free', ?, ?, ?)`,
+    nowIso, longContent, nowIso, nowIso,
+  );
+  run(
+    `INSERT INTO items (source_id, external_id, url, url_key, title, title_key, category, score, published_at, status, is_free, obtain, content, first_seen_at, last_seen_at)
+     VALUES ('tg-cn-deals', 'e8-other', 'https://t.me/s/nodeseekc/e8', 't.me/e8', 'E8 测试同标题条目', 'e8测试同标题条目', 'cloud', 75, ?, 'active', 1, 'free', ?, ?, ?)`,
+    nowIso, longContent, nowIso, nowIso,
+  );
+  const main = get<{ id: number }>("SELECT id FROM items WHERE external_id = 'e8-main'")!;
+  const relRes = await app.request(`/api/items/${main.id}/related`);
+  const relJson = (await relRes.json()) as { items: Array<Record<string, unknown>> };
+  assert.equal(relJson.items.length, 1);
+  assert.equal("content" in relJson.items[0]!, false);
+  assert.equal("raw" in relJson.items[0]!, false);
+  const detailRes = await app.request(`/api/items/${main.id}`);
+  const detailJson = (await detailRes.json()) as { content: string | null };
+  assert.ok(detailJson.content?.includes("正文全文"));
+});
+
 test("rssCollector 源级分类/关键词/only100Off 提纯过滤与 openrouterCollector 新免费模型解析", async () => {
   const { rssCollector } = await import("../src/server/collectors/rss.ts");
   const { openrouterCollector } = await import("../src/server/collectors/openrouter.ts");

@@ -345,6 +345,8 @@ export type RetentionSettings = {
   ignoredDays: number;
   pushLogDays: number;
   digestDays: number;
+  runsDays: number;
+  failedRunsDays: number;
   auto: boolean;
 };
 
