@@ -347,3 +347,62 @@ test("AI 语义去重：canonical 聚类键零成本拦截已推送的同一活�
     "AI 命中的重复条目应写回聚类键",
   );
 });
+
+test("extractMergeKeys：促销话术里的原价不进指纹，中英对报才可能同键", () => {
+  assert.deepEqual(
+    extractMergeKeys("Epic喜加一，免费领取原价47的面包和年糕"),
+    ["面包和年糕"],
+    "「原价47」是话术不是商品名，留在 key 里会让同款福利分家",
+  );
+  assert.deepEqual(extractMergeKeys("Epic 喜加一：《Bread and Fred》游戏免费领取"), ["bread fred"]);
+});
+
+test("extractAliasPairs：正文里的「英文名，中文名」能学出双语对照", async () => {
+  const { extractAliasPairs } = await import("../src/server/enrich/dedup.ts");
+  assert.deepEqual(
+    extractAliasPairs("epic本周可以免费领取的是原价47的Bread & Fred，中文名面包和年糕 这是一款横版像素风"),
+    [{ latin: "Bread & Fred", cjk: "面包和年糕" }],
+  );
+  assert.deepEqual(extractAliasPairs("本周免费领取《面包和年糕》（英文名 Bread and Fred）"), [
+    { latin: "Bread and Fred", cjk: "面包和年糕" },
+  ]);
+  assert.deepEqual(extractAliasPairs("腾讯云轻量应用服务器 2核4G 中文名字叫啥"), [], "疑问句不算对照");
+});
+
+test("resolveDbMergeKey：正文双语名会建立别名，标题只有中文也落到英文主键", async () => {
+  const { resolveDbMergeKey, refreshTitleAliasMap } = await import("../src/server/enrich/alias.ts");
+  // 先有英文版条目占住 bread fred
+  assert.equal(
+    resolveDbMergeKey("Epic 喜加一：《Bread and Fred》游戏免费领取", "Epic 本周送出的游戏是《Bread and Fred》"),
+    "bread fred",
+  );
+  // 中文源标题只有中文名，正文给了英文名 -> 应折算到同一个键
+  assert.equal(
+    resolveDbMergeKey(
+      "Epic喜加一，免费领取原价47的面包和年糕",
+      "epic本周可以免费领取的是原价47的Bread & Fred，中文名面包和年糕",
+    ),
+    "bread fred",
+  );
+  refreshTitleAliasMap();
+});
+
+test("TitleDeduper：别名表能把中英两条报道并进同一簇", async () => {
+  const { setTitleAliasMap } = await import("../src/server/enrich/dedup.ts");
+  const entries = [
+    { title: "Epic 喜加一：《Bread and Fred》游戏免费领取", kind: "freebie", category: "game" },
+    { title: "Epic喜加一，免费领取面包和年糕", kind: "freebie", category: "game" },
+    { title: "阿里云轻量服务器特价", kind: "deal", category: "cloud" },
+  ];
+  const without = new TitleDeduper(entries, [], { aliasMap: new Map() });
+  assert.notEqual(without.rootOf(entries[0] as never), without.rootOf(entries[1] as never), "没有别名表时两条不同键");
+
+  setTitleAliasMap(new Map([["面包和年糕", "bread fred"]]));
+  const withAlias = new TitleDeduper(entries, []);
+  assert.equal(
+    withAlias.rootOf(entries[0] as never),
+    withAlias.rootOf(entries[1] as never),
+    "注入别名表后中英两条应并簇",
+  );
+  setTitleAliasMap(null);
+});

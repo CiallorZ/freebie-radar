@@ -34,6 +34,8 @@ features:
     details: 官方镜像已发布到 Docker Hub（一条 docker run 起站），也支持源码构建；内置 SQLite WAL（Schema v32），常驻内存约 80–100 MiB。
   - title: 中英双语
     details: 界面文案全部走零依赖 i18n（中文即词典 key，非中文浏览器默认英文），顶栏/侧栏一键切换或 ?lang=en 直达。
+  - title: 口径可外置
+    details: 系统提示词支持从远端 URL 同步（带 ETag、失败保留上一版），调审核口径不用发版；AI 支持 Chat Completions 与 Responses 两套协议。
   - title: 交给 AI 部署
     details: 一段可复制的部署指令，Claude Code / Codex / Cursor 都能照着跑；附带 6 条可自动验证的验收清单，不靠「我觉得好了」。
 ---

@@ -26,6 +26,34 @@
   - 支持从「我的收藏（正样本）」与「已关闭/忽略（负样本）」自动采样，让 AI 越用越懂你的口味；
 - **历史库补审与零 Token 重整**：调整规则或提示词后可一键选择 `pending`（仅未审）、`recent`（最近条目重审）或 `rejected`（复核误杀条目），也可直接点击 **「重整分类 (0 Token)」** 零成本重跑规则与证据校验。
 
+## 协议类型：Chat Completions 与 Responses
+
+内置两套 OpenAI 协议，审核、语义去重、连通测试三处共用同一个客户端（`src/server/enrich/ai-client.ts`），不会出现「审核能用、测试报错」的错位：
+
+- **默认（Chat Completions）**：`POST {baseUrl}/chat/completions`，携带 `temperature: 0`，兼容绝大多数中转站。
+- **Responses**：`POST {baseUrl}/responses`，`instructions` 传系统提示词、`input` 传批量 JSON；不传 `temperature`（给不支持采样参数的模型留活路），只取 `output[].content[]` 里 `type=output_text` 的文本，跳过推理与工具输出；`status` 不是 `completed` 直接判失败，不会把半截结果当审核结论。
+
+配置方式二选一：网页「AI 引擎 → 协议类型」下拉（热生效），或首次部署时用 `AI_PROTOCOL=response` 初始化。**基础地址只填到 `/v1`**，不要自己拼 `/chat/completions` 或 `/responses`。
+
+## 云端提示词（可选）
+
+审核口径可以放在仓库外，改完不用发版：
+
+```bash
+PROMPT_URL=https://raw.githubusercontent.com/<you>/<repo>/main/system.md
+PROMPT_EXTRA_URL=https://raw.githubusercontent.com/<you>/<repo>/main/extra.md
+PROMPT_SYNC_MINUTES=10   # 0 = 只在启动时同步一次
+```
+
+- 启动时同步一次，之后按 `PROMPT_SYNC_MINUTES` 轮询，请求带 `If-None-Match`，`304` 不写库
+- 拉取失败、内容为空、超过 20000 字或非 `https` 时**保留上一版**，只记录 `lastError`
+- 状态与手动触发：`GET /api/ai/prompt-sync` 看状态，`POST /api/ai/prompt-sync` 立即同步（均需 `ADMIN_TOKEN`）
+- 自定义 `systemPrompt` 时，服务端仍会自动补上分类清单（`category` 取值与细类说明来自 `src/shared/taxonomy.ts`），提示词里不用重复写
+
+## 提示词只做语义，硬事实由证据规则兜底
+
+提示词管「有没有可领的对象、是不是新闻体裁、该进哪个分类」这类语义判断；形态 `kind` 出来后还会被 `src/server/enrich/index.ts` 的证据规则二次校验：仓库 URL、价格、兑换码、`（已无）/已领完`、`.ics 订阅/资源合集` 这类硬事实不会被提示词推翻。调完提示词发现个别条目仍错，改的是规则而不是提示词。
+
 ## 返回契约
 
 AI 输出严格 JSON 数组，每条包含：

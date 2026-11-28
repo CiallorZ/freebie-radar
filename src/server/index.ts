@@ -22,9 +22,12 @@ import { purgeExpiredSessions } from "./auth.ts";
 import { getBuildInfo } from "./updater.ts";
 import { registerSecurity } from "./security.ts";
 import { reconcileFixedSourceCategories } from "./source-settings.ts";
+import { refreshTitleAliasMap } from "./enrich/alias.ts";
 
 migrate();
 ensureSources();
+// 双语别名表（中文名 -> 英文主键）先灌进纯文本聚类，否则启动初期跨源聚合会漏掉中英对报
+refreshTitleAliasMap();
 const rerouted = reconcileFixedSourceCategories();
 if (rerouted) console.log(`[sources] 固定分类已重整 ${rerouted} 条历史资源（未触发 AI 或推送）`);
 // 上次进程意外退出可能遗留 status='running' 的记录，启动时收口

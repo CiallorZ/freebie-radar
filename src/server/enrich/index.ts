@@ -349,7 +349,28 @@ const CLAIM_NEEDED_CATEGORIES = new Set(["tech", "hardware", "other", "finance",
 
 /** contentSignals().claim 没覆盖、但标题里一样算「真有东西可领」的说法。 */
 /** 重新打包的软件产物：绿色版 / 便携版 / 修改版 / 精简版 / 破解版。 */
-const PIRATED_BUILD_RE = /绿色版|便携版|修改版|精简版|破解版|免安装|汉化版|注册版|特别版/;
+const PIRATED_BUILD_RE =
+  /绿色版|便携版|修改版|精简版|破解版|免安装|汉化版|注册版|特别版|直装解锁|解锁(?:专业|高级|完整|终身|付费|尊享)版|捐赠(?:专业)?版/;
+
+/** 已经领完/失效的福利：标题自己写「（已无）」，再挂进真福利就是噪音。 */
+const SOLD_OUT_TITLE_RE =
+  /[（(【\[]\s*已无\s*[）)】\]]|已无(?=[）)】\]，,。；;、]|$)|已失效|已过期|已被领完|已领完|已抢完|已发完|名额已满|名额已领完|活动已结束/;
+
+/**
+ * 只是「给个地址」的资源帖：「泛用」但不等于「能领到一份东西」。
+ * 用户口径：真福利必须是泛用、真实、简单可领取的 —— .ics 日历订阅、资源合集、手册文档属于「拿到一个链接/一份资料」，
+ * 标题里没有领取动作时不算福利（「2027 國定假日行事曆訂閱：免費 .ics 網址」曾靠 AI 一句话判进真福利 + 74 分）。
+ */
+const RESOURCE_LINK_RE =
+  /\.ics\b|行事曆|行事历|订阅日历|日曆訂閱|日历订阅|合輯|合集|資源匯總|资源汇总|资源合集|资料包|资源包|使用手册|手冊|操作手册|源文件|说明书|說明書/i;
+
+/**
+ * 安全事件报道：遭黑客、数据外泄、漏洞披露是新闻，没有可领对象。
+ * 「日本三井购物公园 App 遭黑客非法访问，311.9 万名会员个人信息外泄」曾被判成真福利 + 74 分，
+ * 因为 security 既不在资讯类里、也不算中性分类，两道闸门都没拦住。
+ */
+const SECURITY_INCIDENT_RE =
+  /遭(?:黑客|入侵|攻击)|非法访问|被黑|(?:信息|数据|账号|账户|用户|会员)[^，。；]{0,6}(?:泄露|外泄|泄漏)|(?:泄露|外泄)[^，。；]{0,8}(?:信息|数据|账号|用户)|漏洞|木马|勒索软件|钓鱼/;
 
 /** 新闻体裁：出现这些词说明是报道，不是发福利。 */
 const NEWS_VOICE_RE = /消息称|据悉|宣布|筹备|计划|或将|预计|报道|曝光|记者|官方表示|发布会|招聘|岗位|财报|数据显示/;
@@ -399,6 +420,12 @@ export function enforceFreebieEvidence(
   if (!obtain || obtain === "free") obtain = ruleObtain;
   if (revoked) return { kind: kind === "freebie" ? "info" : kind, obtain: "paid", category };
   if (kind !== "freebie") return { kind, obtain, category };
+  if (SOLD_OUT_TITLE_RE.test(title)) return { kind: "info", obtain: null, category };
+  if (RESOURCE_LINK_RE.test(title) && !TITLE_CLAIM_RE.test(title)) return { kind: "info", obtain: null, category };
+  // 安全类里的「遭黑客/数据外泄」报道：没有可领对象，别因为分类不叫 news 就漏过去
+  if (category === "security" && SECURITY_INCIDENT_RE.test(title) && !contentSignals(title, extra.summary ?? "").claim) {
+    return { kind: "info", obtain: null, category };
+  }
   if (ruleObtain === "lottery" || obtain === "lottery" || LOTTERY_TITLE_RE.test(title)) {
     return { kind, obtain: "lottery", category: "lottery" };
   }

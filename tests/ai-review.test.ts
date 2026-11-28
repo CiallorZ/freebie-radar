@@ -146,3 +146,28 @@ test("无效返回重试成功后使用完整的有效批次", async (t) => {
   assert.equal(attempt, 2);
   assert.equal(result?.size, 2);
 });
+
+test("协议类型 response 时改走 /responses，并只取 message.output_text", async (t) => {
+  const calls: { url: string; body: Record<string, unknown> }[] = [];
+  t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    calls.push({ url: String(input), body });
+    const input_ = body.input as string;
+    const payload = JSON.parse(input_) as PayloadItem[];
+    const output = [
+      { type: "reasoning", content: [{ type: "reasoning_text", text: "不该被当成结论" }] },
+      { type: "message", content: [{ type: "output_text", text: JSON.stringify(verdicts(payload)) }] },
+    ];
+    return new Response(JSON.stringify({ status: "completed", output }), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+
+  const map = await reviewItems(items.slice(0, 2), { ...settings, protocol: "response" });
+  assert.equal(calls.length, 1, "两次批量并发但同一批只发一次");
+  assert.equal(calls[0]!.url, "https://ai-review.invalid/v1/responses");
+  assert.equal(typeof calls[0]!.body.instructions, "string", "系统提示词走 instructions");
+  assert.equal(calls[0]!.body.temperature, undefined, "Responses 不传 temperature");
+  assert.equal(map?.size, 2, "只取 output_text，推理输出被跳过");
+  assert.equal(map?.get(0)?.category, "ai");
+});

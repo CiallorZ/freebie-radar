@@ -667,7 +667,7 @@ const scoreCtx = {
       );
       const aiJson = verdict ? JSON.stringify({ ...verdict, kind: effectiveKind, category: effectiveCategory, obtain: effectiveObtain }) : null;
       const status = e.keep ? "active" : "expired";
-      const titleKey = resolveDbMergeKey(e.title);
+      const titleKey = resolveDbMergeKey(e.title, e.summary ?? "");
 
       const existing = get<{
         id: number;

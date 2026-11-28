@@ -306,3 +306,71 @@ for (const title of ["免费领取软件授权，原价 ￥99", "Free software l
     assert.equal(price.price, 0);
   });
 }
+
+// 真福利频道只收「真能领到的东西」：安全事件、破解打包、已领完的都不该靠 AI 一句话混进去
+const { enforceFreebieEvidence } = await import("../src/server/enrich/index.ts");
+
+for (const title of [
+  "日本“三井购物公园”App 遭黑客非法访问，311.9 万名会员个人信息外泄",
+  "日本京王集团披露 9 月黑客攻击事件影响：约 1063 万客户信息遭泄露",
+]) {
+  test(`安全事件报道不进真福利：${title.slice(0, 18)}`, () => {
+    const out = enforceFreebieEvidence("freebie", "free", title, "security", {
+      summary: "据日媒 ITMedia 报道，公司昨日发布通报，称 App 遭到黑客非法访问，导致会员个人信息外泄。",
+    });
+    assert.equal(out.kind, "info");
+    assert.equal(out.obtain, null);
+  });
+}
+
+for (const title of [
+  "Zero Trust & SASE — Up to 50 Users, 24 hours of activity log",
+  "【薅毛必备】Firefox 自带免费 VPN ，每月 50GB 流量",
+  "分享一个订阅链接",
+]) {
+  test(`安全类里真能白拿的保留 freebie：${title.slice(0, 18)}`, () => {
+    assert.equal(enforceFreebieEvidence("freebie", "free", title, "security", {}).kind, "freebie");
+  });
+}
+
+for (const title of [
+  "ZArchiver Pro v1.0.10 for Android 捐赠专业版 + ZArchiver v1.0.10 —— 完美支持中文",
+  "Flowx Pro v4.654 for Android 解锁专业版 —— 独特的可视化天气预报",
+  "Adobe Photoshop Express Pro v18.6.46 for Android 直装解锁高级版",
+]) {
+  test(`解锁/捐赠版是重新打包的软件，不算白拿福利：${title.slice(0, 16)}`, () => {
+    assert.equal(enforceFreebieEvidence("freebie", "free", title, "software", {}).kind, "info");
+  });
+}
+
+for (const title of ["（已无）美团单车七天无限次骑行卡", "美团单车7天无限次卡还有5次可以领（已无）", "会员月卡已领完", "【已无，后续看情况再来第三弹】什么？gpt又重置了？"]) {
+  test(`标题自己写已无的福利不进真福利：${title.slice(0, 14)}`, () => {
+    assert.equal(enforceFreebieEvidence("freebie", "conditional", title, "offline", {}).kind, "info");
+  });
+}
+
+for (const title of [
+  "2027 國定假日行事曆訂閱：nongminli.tw 免費 .ics 網址，iPhone、Google、Outlook 都能加",
+  "掘金小册-合集 整理",
+  "B0038 清华博士后的DeepSeek使用手册，104页",
+]) {
+  test(`只是给个地址/资料的资源帖不算真福利：${title.slice(0, 16)}`, () => {
+    assert.equal(enforceFreebieEvidence("freebie", "free", title, "tech", {}).kind, "info");
+  });
+}
+
+for (const title of [
+  "【开发者自荐】一起野：免费的多人露营装备认领清单，无需注册",
+  "免费领取 3 个月 Gemini Pro（附领取链接）",
+  "Epic 喜加一：《Bread and Fred》游戏免费领取",
+]) {
+  test(`有领取动作的仍算真福利：${title.slice(0, 16)}`, () => {
+    assert.equal(enforceFreebieEvidence("freebie", "free", title, "ai", {}).kind, "freebie");
+  });
+}
+
+for (const title of ["账号已无法登录，求助怎么找回"]) {
+  test(`「已无法…」不是已领完：${title.slice(0, 10)}`, () => {
+    assert.notEqual(enforceFreebieEvidence("freebie", "free", title, "ai", {}).kind, "info");
+  });
+}

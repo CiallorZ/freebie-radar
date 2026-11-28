@@ -142,7 +142,7 @@ summary: e.summary ?? "",
           codes: e.codes,
           price: e.price,
         });
-        const titleKey = resolveDbMergeKey(row.title);
+        const titleKey = resolveDbMergeKey(row.title, row.summary ?? "");
         run(
           "UPDATE items SET category = ?, obtain = ?, kind = ?, ai_quality = COALESCE(?, ai_quality), tags = ?, score = ?, expires_at = ?, price = ?, is_free = ?, codes = ?, title_key = ?, status = CASE WHEN status = 'ignored' THEN 'ignored' ELSE ? END WHERE id = ?",
           finalCategory, finalObtain, finalKind, finalQuality, JSON.stringify(e.tags), finalScore, e.expiresAt,

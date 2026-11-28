@@ -101,7 +101,9 @@ function normalizeCnTitle(title: string, stripFiller: boolean): string {
   if (stripFiller) {
     s = s
       .replace(/\b(?:epic|steam|gog|aff|noaff)\b/gi, " ")
-      .replace(CN_FILLER_RE, " ");
+      .replace(CN_FILLER_RE, " ")
+      // 「原价47」「价值¥99」是促销话术，不是商品名的一部分；留着会让同款福利的 key 各不相同
+      .replace(/(?:原价|(?<!剩余)价值|总价值|售价|定价|官方价|市价)\s*[¥￥$]?\s*\d+(?:\.\d+)?/g, " ");
   }
 
   return s
@@ -227,6 +229,39 @@ export function extractMergeKeys(title: string): string[] {
 /** 单字符串指纹（写入 items.title_key）。 */
 export function mergeKey(title: string): string {
   return extractMergeKeys(title)[0] ?? "";
+}
+
+/**
+ * 从标题/正文里学习「英文名 + 中文名」双语对照。
+ * 中文源常把英文名写在正文、标题只留中文名（如「原价47的Bread & Fred，中文名面包和年糕」），
+ * 光看标题没有双语桥接，同一款福利的中英文报道就永远聚不到一起。
+ */
+const ALIAS_LATIN = "(?:[A-Za-z][A-Za-z0-9&'’\\-]*|&)";
+const ALIAS_LATIN_NAME = `${ALIAS_LATIN}(?:\\s*${ALIAS_LATIN}){0,4}`;
+const ALIAS_CN_KEY = "(?:中文名(?!字)|中文名称|官方译名|官方中文名|中文译名|中译名|译名|又名|中文叫)";
+const ALIAS_EN_KEY = "(?:英文名(?!字)|英文名称|英文名字|外文名|原名)";
+const ALIAS_LATIN_FIRST_RE = new RegExp(
+  `(${ALIAS_LATIN_NAME})[\\s，,（(、:：》]*${ALIAS_CN_KEY}\\s*[:：]?\\s*([\\u4e00-\\u9fff·]{2,12}?)(?=[\\s，,。；;、！!？?)）》]|$)`,
+  "g",
+);
+const ALIAS_CJK_FIRST_RE = new RegExp(
+  `([\\u4e00-\\u9fff·]{2,12}?)[》》）)]?\\s*[，,（(、:：]\\s*${ALIAS_EN_KEY}\\s*[:：]?\\s*[（(]?(${ALIAS_LATIN_NAME})`,
+  "g",
+);
+
+export function extractAliasPairs(text: string): Array<{ latin: string; cjk: string }> {
+  const out: Array<{ latin: string; cjk: string }> = [];
+  if (!text) return out;
+  const push = (latin: string, cjk: string) => {
+    const l = latin.replace(/\s+/g, " ").trim();
+    const c = cjk.trim();
+    if (!l || !c) return;
+    if (out.some((p) => p.latin === l && p.cjk === c)) return;
+    out.push({ latin: l, cjk: c });
+  };
+  for (const m of text.matchAll(ALIAS_LATIN_FIRST_RE)) push(m[1] ?? "", m[2] ?? "");
+  for (const m of text.matchAll(ALIAS_CJK_FIRST_RE)) push(m[2] ?? "", m[1] ?? "");
+  return out;
 }
 
 /** 用于无《》中文标题近重复比对的 token 集（ASCII 词 + 中文二元组）。 */
@@ -409,12 +444,27 @@ export type DedupeEntry = {
  * - 无《》中文标题高相似度（Jaccard >= 0.75）
  * - 同事件/话题实体聚类（如多篇不同措辞的 CAR-T 进医保报道，且受品牌冲突保护）
  */
+/**
+ * 双语别名表（中文名 -> 英文主键）：由 alias.ts 从 title_aliases 注入。
+ * 本模块不碰 DB，靠这张表让纯文本聚类也能把「面包和年糕」和「bread fred」并成一簇。
+ */
+let titleAliasMap: ReadonlyMap<string, string> | null = null;
+
+export function setTitleAliasMap(map: ReadonlyMap<string, string> | null): void {
+  titleAliasMap = map && map.size ? map : null;
+}
+
 export class TitleDeduper<T extends DedupeEntry> {
   private parent: number[];
   private seenRoots = new Set<number>();
   private indexByItem = new Map<T, number>();
 
-  constructor(candidates: readonly T[], seeds: readonly DedupeEntry[] = [], options?: { maxGapHours?: number }) {
+  constructor(
+    candidates: readonly T[],
+    seeds: readonly DedupeEntry[] = [],
+    options?: { maxGapHours?: number; aliasMap?: ReadonlyMap<string, string> },
+  ) {
+    const aliases = options?.aliasMap ?? titleAliasMap;
     const allItems: DedupeEntry[] = [...seeds, ...candidates];
     const n = allItems.length;
     this.parent = Array.from({ length: n }, (_, i) => i);
@@ -453,7 +503,9 @@ export class TitleDeduper<T extends DedupeEntry> {
         else byCanonical.set(item.canonicalId, i);
       }
 
-      for (const k of extractMergeKeys(item.title)) {
+      for (const raw of extractMergeKeys(item.title)) {
+        // 中文名经别名表折算到英文主键，中英两条报道才会落进同一个 byKey 桶
+        const k = aliases?.get(raw) ?? raw;
         const list = byKey.get(k);
         if (list) {
           for (const prev of list) {

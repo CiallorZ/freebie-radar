@@ -22,6 +22,7 @@ import {
 import { KIND_LABEL, OBTAIN_LABEL, categoryLabel, timeAgo } from "../lib/sources.ts";
 import type { AiPayload, AiSettings, AiSourceMode, AiStage, AiStats, Source } from "../types.ts";
 import { t } from "../lib/i18n.ts";
+import { AiProtocolField } from "./AiProtocolField.tsx";
 
 const STAGE_META: Record<AiStage, { label: string; cls: string }> = {
   sync: { label: t("推送前同步"), cls: "bg-brand-subtle text-accent border-brand-border" },
@@ -266,6 +267,7 @@ export function AiPanel({
     setTest(null);
     try {
       const draft: Partial<AiSettings> = {
+        protocol: form?.protocol,
         baseUrl: form?.baseUrl ?? "",
         model: form?.model ?? "",
         apiKey: (form?.apiKey ?? "").startsWith("••••") ? "" : (form?.apiKey ?? ""),
@@ -575,7 +577,7 @@ export function AiPanel({
                   </div>
 
                   {/* 柔和流光进度条 */}
-                  <div className="relative h-2 overflow-hidden rounded-full bg-knob/80 ring-1 ring-brand-border/60">
+                  <div className="relative h-2 overflow-hidden rounded-full bg-ink-100 ring-1 ring-brand-border/60">
                     <div
                       className="relative h-full overflow-hidden rounded-full bg-accent-solid transition-[width] duration-300 ease-out"
                       style={{ width: Math.max(6, pct) + "%" }}
@@ -601,7 +603,7 @@ export function AiPanel({
                       {job.recentEvents.slice(0, 4).map((ev, idx) => (
                         <div
                           key={ev.title + idx}
-                          className="ai-enter flex items-center gap-2 rounded bg-knob/85 px-2.5 py-1 text-[12px]"
+                          className="ai-enter flex items-center gap-2 rounded bg-surface-muted px-2.5 py-1 text-[12px]"
                         >
                           <span className={"shrink-0 " + (ev.keep ? "text-deal" : "text-alert")}>
                             {ev.keep ? <Check size={12} /> : <CircleX size={12} />}
@@ -916,6 +918,7 @@ export function AiPanel({
               className="w-full rounded-lg border border-ink-200 bg-surface px-2.5 py-1.5 font-mono text-[12px] text-ink-900 outline-none focus:border-brand"
             />
           </label>
+          <AiProtocolField value={form.protocol} onChange={(protocol) => setForm({ ...form, protocol })} />
         </div>
 
         {/* 性能参数 */}
@@ -1074,6 +1077,7 @@ export function AiPanel({
             onClick={() =>
               save({
                 enabled: form.enabled,
+                protocol: form.protocol,
                 baseUrl: form.baseUrl,
                 model: form.model,
                 apiKey: (form.apiKey ?? "").startsWith("••••") ? "" : (form.apiKey ?? ""),

@@ -65,6 +65,18 @@ docker compose --profile cf up -d --build
 
 > 服务已内置会话空闲 **90 秒** 自动销毁释放浏览器内存的机制，避免空闲时长期占用数百 MB RAM。
 
+## 环境变量速查
+
+`.env` 只管进程级变量；AI 模型、提示词、推送路由、屏蔽词等策略都在网页管理区热改，重启不丢。完整表格见 [README 的环境变量说明](https://github.com/ZiChuanLan/freebie-radar#环境变量说明env)，这里只列容易漏的几项：
+
+| 变量 | 说明 |
+|---|---|
+| `ADMIN_TOKEN` | 管理区密码，公网部署必须设强密码 |
+| `AI_BASE_URL` / `AI_API_KEY` / `AI_MODEL` | 首次启动的 AI 默认值，之后在「AI 引擎」里改 |
+| `AI_PROTOCOL` | 留空走 `/chat/completions`；`response` 走 `/responses`。基础地址只到 `/v1` |
+| `PROMPT_URL` / `PROMPT_EXTRA_URL` / `PROMPT_SYNC_MINUTES` | 云端提示词，改审核口径不用发版，见「AI 语义审核」一页 |
+| `ENABLE_SCHEDULER` | 关掉后只提供网页与 API，不跑采集/推送调度 |
+
 ## 反向代理（Nginx / Caddy）
 
 建议使用 Caddy 或 Nginx 配置 HTTPS 反代并设置强 `ADMIN_TOKEN`：
