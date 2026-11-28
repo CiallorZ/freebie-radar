@@ -73,6 +73,27 @@ const CURL_OK = (() => {
   }
 })();
 
+const RETRYABLE_STATUS = new Set([429, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * E6：429 / 502 / 503 / 504 只重试一次。等多久先看 Retry-After（秒数或 HTTP 日期，
+ * 上限 10 秒），没有就 2 秒起指数退避（同样封顶 10 秒）。
+ */
+function retryDelayMs(res: HttpResponse | null, attempt: number): number {
+  const ra = res?.headers.get("retry-after");
+  if (ra) {
+    const secs = Number(ra.trim());
+    if (Number.isFinite(secs) && secs >= 0) return Math.min(secs, 10) * 1000;
+    const dateMs = Date.parse(ra);
+    if (Number.isFinite(dateMs)) return Math.min(Math.max(dateMs - Date.now(), 0), 10_000);
+  }
+  return Math.min(2000 * 2 ** attempt, 10_000);
+}
+
 async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy = ""): Promise<HttpResponse> {
   const args = [
     "-sS",
@@ -86,7 +107,7 @@ async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy
     "-H",
     "accept: text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.9,*/*;q=0.8",
     "-w",
-    "\n__STATUS__%{http_code}\n__CT__%{content_type}\n__ETAG__%header{etag}\n__LM__%header{last-modified}\n__URL__%{url_effective}",
+    "\n__STATUS__%{http_code}\n__CT__%{content_type}\n__ETAG__%header{etag}\n__LM__%header{last-modified}\n__RA__%header{retry-after}\n__URL__%{url_effective}",
   ];
   if (opts.redirect !== "manual") args.push("-L", "--max-redirs", "5");
   if (proxy) args.push("-x", proxy);
@@ -109,7 +130,7 @@ async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy
       }
       const out = Buffer.concat(chunks);
       const text = out.toString("utf8");
-      const m = /\n__STATUS__(\d+)\n__CT__([^\n]*)\n__ETAG__([^\n]*)\n__LM__([^\n]*)\n__URL__(.*)$/s.exec(text);
+      const m = /\n__STATUS__(\d+)\n__CT__([^\n]*)\n__ETAG__([^\n]*)\n__LM__([^\n]*)\n__RA__([^\n]*)\n__URL__(.*)$/s.exec(text);
       if (!m) {
         reject(new Error("curl 输出无法解析"));
         return;
@@ -120,9 +141,10 @@ async function viaCurl(url: string, opts: FetchOptions, timeoutMs: number, proxy
       const headers = new Headers(contentType ? { "content-type": contentType } : {});
       if (m[3]) headers.set("etag", m[3]);
       if (m[4]) headers.set("last-modified", m[4]);
+      if (m[5]) headers.set("retry-after", m[5]);
       resolve({
         status: Number(m[1]),
-        url: m[5] || url,
+        url: m[6] || url,
         headers,
         bytes: bodyBytes,
         body: decode(bodyBytes, contentType),
@@ -152,14 +174,38 @@ export function createHttp(options: { proxy?: string; timeoutMs?: number; gapMs?
    * curl 不可用（本地 Windows 开发）时回退到 fetch。
    */
   async function raw(url: string, opts: FetchOptions = {}): Promise<HttpResponse> {
-    await waitGap();
+    const method = opts.method ?? "GET";
     const timeout = opts.timeoutMs ?? timeoutMs;
+    let lastRes: HttpResponse | null = null;
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await sleep(retryDelayMs(lastRes, attempt - 1));
+      await waitGap();
+      try {
+        const res = await fetchOnce(url, opts, timeout);
+        if (!RETRYABLE_STATUS.has(res.status)) return res;
+        lastRes = res; // 可重试状态：再试一次
+      } catch (e) {
+        lastErr = e;
+        // 传输失败（超时/断连）：只有无 body 的 GET 才重试，避免 POST 重复提交
+        if (method !== "GET" || opts.body) throw e;
+        lastRes = null;
+      }
+    }
+    if (lastRes) return lastRes;
+    throw lastErr;
+  }
 
+  /**
+   * 单次抓取：curl 优先，失败回退 fetch。E6 的重试在 raw() 里做，这里只做一次。
+   */
+  async function fetchOnce(url: string, opts: FetchOptions, timeout: number): Promise<HttpResponse> {
     if (CURL_OK) {
       try {
         return await viaCurl(url, opts, timeout, proxy);
-      } catch {
-        /* curl 失败就落到 fetch */
+      } catch (e) {
+        // E6：curl 失败不再静默吞掉，记一行再回退 fetch
+        console.warn(`[http] curl 失败，回退 fetch：${url} ${(e as Error)?.message ?? e}`);
       }
     }
 
